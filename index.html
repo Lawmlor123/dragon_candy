@@ -4,16 +4,34 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
 <title>Little Dragon Flyer 🐉</title>
+
 <style>
-  :root{
-    color-scheme:light;
+  :root {
+    color-scheme: light;
   }
-  body{
-    margin:0;
-    overflow:hidden;
-    background:linear-gradient(to bottom,#87ceeb,#dff9fb);
-    font-family:"Comic Sans MS",cursive;
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #87ceeb, #dff9fb);
+    font-family: "Comic Sans MS", cursive;
   }
+
+  /* 👇 Style added so the music button is visible */
+  #startMusic {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 9999;
+    background: rgba(255, 255, 255, 0.85);
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 18px;
+  }
+</style>
+
 <!-- 🎵 MUSIC SETUP -->
 <button id="startMusic">🎵 Start Game Music</button>
 
@@ -30,13 +48,9 @@
   // Attach listener to the start button
   document.getElementById("startMusic").addEventListener("click", async () => {
     console.log("🎵 Button clicked — attempting to play chase_fixed.mp3");
-
     try {
       // Pause any other tracks just in case
-      pulseMusic.pause();
-      stormMusic.pause();
-      pulseMusic.currentTime = 0;
-      stormMusic.currentTime = 0;
+      [pulseMusic, stormMusic].forEach(m => { m.pause(); m.currentTime = 0; });
 
       // Attempt to play the main theme
       await dayMusic.play();
@@ -2786,4 +2800,5 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
