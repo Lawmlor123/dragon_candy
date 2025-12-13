@@ -14,24 +14,43 @@
     background:linear-gradient(to bottom,#87ceeb,#dff9fb);
     font-family:"Comic Sans MS",cursive;
   }
-  <!-- 🎵 MUSIC SETUP -->
-  <button id="startMusic">🎵 Start Game Music</button>
+<!-- 🎵 MUSIC SETUP -->
+<button id="startMusic">🎵 Start Game Music</button>
 
-  <audio id="dayMusic" src="Music/chase_fixed.mp3" preload="auto" loop></audio>
-  <audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
-  <audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
+<audio id="dayMusic" src="Music/chase_fixed.mp3" preload="auto" loop></audio>
+<audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
+<audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
 
-  <script>
-    const dayMusic = document.getElementById("dayMusic");
-    const pulseMusic = document.getElementById("pulseMusic");
-    const stormMusic = document.getElementById("stormMusic");
+<script>
+  // Grab the audio elements
+  const dayMusic   = document.getElementById("dayMusic");
+  const pulseMusic = document.getElementById("pulseMusic");
+  const stormMusic = document.getElementById("stormMusic");
 
-    document.getElementById("startMusic").addEventListener("click", () => {
-      // Play one track (you can later switch tracks in your game logic)
-      dayMusic.play().catch(err => console.warn("Autoplay blocked:", err));
-    });
-  </script>
-  <!-- ✅ END MUSIC SETUP -->
+  // Attach listener to the start button
+  document.getElementById("startMusic").addEventListener("click", async () => {
+    console.log("🎵 Button clicked — attempting to play chase_fixed.mp3");
+
+    try {
+      // Pause any other tracks just in case
+      pulseMusic.pause();
+      stormMusic.pause();
+      pulseMusic.currentTime = 0;
+      stormMusic.currentTime = 0;
+
+      // Attempt to play the main theme
+      await dayMusic.play();
+      console.log("✅ Music started successfully");
+    } catch (err) {
+      console.error("❌ Music failed to start:", err);
+      alert(
+        "Your browser blocked the audio from auto‑playing.\n" +
+        "Click the button again or check the console for details."
+      );
+    }
+  });
+</script>
+<!-- ✅ END MUSIC SETUP -->
   canvas{display:block;}
   #scoreBoard{
     position:absolute;
@@ -2771,5 +2790,6 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
