@@ -14,6 +14,24 @@
     background:linear-gradient(to bottom,#87ceeb,#dff9fb);
     font-family:"Comic Sans MS",cursive;
   }
+  <!-- 🎵 MUSIC SETUP -->
+  <button id="startMusic">🎵 Start Game Music</button>
+
+  <audio id="dayMusic" src="Music/chase.mp3" preload="auto" loop></audio>
+  <audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
+  <audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
+
+  <script>
+    const dayMusic = document.getElementById("dayMusic");
+    const pulseMusic = document.getElementById("pulseMusic");
+    const stormMusic = document.getElementById("stormMusic");
+
+    document.getElementById("startMusic").addEventListener("click", () => {
+      // Play one track (you can later switch tracks in your game logic)
+      dayMusic.play().catch(err => console.warn("Autoplay blocked:", err));
+    });
+  </script>
+  <!-- ✅ END MUSIC SETUP -->
   canvas{display:block;}
   #scoreBoard{
     position:absolute;
@@ -2753,3 +2771,4 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
