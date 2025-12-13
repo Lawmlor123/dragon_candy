@@ -5,66 +5,68 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
 <title>Little Dragon Flyer 🐉</title>
 
-<style>
-  :root {
-    color-scheme: light;
-  }
-
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: linear-gradient(to bottom, #87ceeb, #dff9fb);
-    font-family: "Comic Sans MS", cursive;
-  }
-
-  /* 👇 Style added so the music button is visible */
-  #startMusic {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 9999;
-    background: rgba(255, 255, 255, 0.85);
-    border: 2px solid #333;
-    border-radius: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
-    font-size: 18px;
-  }
-</style>
-
-<!-- 🎵 MUSIC SETUP -->
-<button id="startMusic">🎵 Start Game Music</button>
-
-<audio id="dayMusic" src="Music/chase_fixed.mp3" preload="auto" loop></audio>
-<audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
-<audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
-
-<script>
-  // Grab the audio elements
-  const dayMusic   = document.getElementById("dayMusic");
-  const pulseMusic = document.getElementById("pulseMusic");
-  const stormMusic = document.getElementById("stormMusic");
-
-  // Attach listener to the start button
-  document.getElementById("startMusic").addEventListener("click", async () => {
-    console.log("🎵 Button clicked — attempting to play chase_fixed.mp3");
-    try {
-      // Pause any other tracks just in case
-      [pulseMusic, stormMusic].forEach(m => { m.pause(); m.currentTime = 0; });
-
-      // Attempt to play the main theme
-      await dayMusic.play();
-      console.log("✅ Music started successfully");
-    } catch (err) {
-      console.error("❌ Music failed to start:", err);
-      alert(
-        "Your browser blocked the audio from auto‑playing.\n" +
-        "Click the button again or check the console for details."
-      );
+</head>
+<body>
+  <style>
+    :root {
+      color-scheme: light;
     }
-  });
-</script>
-<!-- ✅ END MUSIC SETUP -->
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #87ceeb, #dff9fb);
+      font-family: "Comic Sans MS", cursive;
+    }
+
+    /* 👇 Style added so the music button is visible */
+    #startMusic {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 9999;
+      background: rgba(255, 255, 255, 0.85);
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+  </style>
+
+  <!-- 🎵 MUSIC SETUP -->
+  <button id="startMusic">🎵 Start Game Music</button>
+
+  <audio id="dayMusic" src="Music/chase_fixed.mp3" preload="auto" loop></audio>
+  <audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
+  <audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
+
+  <script>
+    // Grab the audio elements
+    const dayMusic   = document.getElementById("dayMusic");
+    const pulseMusic = document.getElementById("pulseMusic");
+    const stormMusic = document.getElementById("stormMusic");
+
+    // Attach listener to the start button
+    document.getElementById("startMusic").addEventListener("click", async () => {
+      console.log("🎵 Button clicked — attempting to play chase_fixed.mp3");
+      try {
+        // Pause any other tracks just in case
+        [pulseMusic, stormMusic].forEach(m => { m.pause(); m.currentTime = 0; });
+
+        // Attempt to play the main theme
+        await dayMusic.play();
+        console.log("✅ Music started successfully");
+      } catch (err) {
+        console.error("❌ Music failed to start:", err);
+        alert(
+          "Your browser blocked the audio from auto‑playing.\n" +
+          "Click the button again or check the console for details."
+        );
+      }
+    });
+  </script>
+  <!-- ✅ END MUSIC SETUP -->
   canvas{display:block;}
   #scoreBoard{
     position:absolute;
@@ -2800,5 +2802,6 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
