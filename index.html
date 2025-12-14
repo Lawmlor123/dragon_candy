@@ -158,12 +158,19 @@
     <span id="scoreText">Score: 0</span>
   </div>
 
-  <div id="overlay">Preparing launch…</div>
+<div id="overlay">Preparing launch…</div>
   <button id="skipBtn" type="button">Skip intro</button>
   <div id="lifeMeter" aria-label="Life meter"></div>
   <div id="winOverlay" role="dialog" aria-live="assertive">
     <strong>Victory!</strong><br />
     <small>Click to continue</small>
+  </div>
+
+  <canvas id="gameCanvas" aria-label="Little Dragon Flyer playfield"></canvas>
+  <div id="touchControls">
+    <button id="btnLeft">⬅️</button>
+    <button id="btnFlap">🕊️</button>
+    <button id="btnRight">➡️</button>
   </div>
 
   <canvas id="gameCanvas" aria-label="Little Dragon Flyer playfield"></canvas>
@@ -413,7 +420,7 @@ const handcraftedLevels = new Map([
     2,
     {
       name: "Bubble Pop",
-      mechanic: "comboGoal",
+      mechanic: "scoreGoal",
       winScore: 500,
       bgGradient: ["#a1c4fd", "#c2e9fb"],
       comboTime: 2000,
@@ -2928,6 +2935,7 @@ requestAnimationFrame(gameLoop); // Begin continuous update & draw
 </script>
 </body>
 </html>
+
 
 
 
