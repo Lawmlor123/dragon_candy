@@ -141,11 +141,35 @@
       cursor: pointer;
       z-index: 6;
     }
-
-    @media (max-width: 600px) {
+@media (max-width: 600px) {
       #scoreBoard { font-size: 18px; line-height: 1.2; }
       #startMusic, #muteBtn { font-size: 16px; }
       #skipBtn { font-size: 16px; padding: 6px 14px; }
+    }
+
+    /* --- touch control button styles --- */
+    #touchControls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;        /* hidden until needed */
+      gap: 20px;
+      z-index: 12;
+    }
+
+    #touchControls button {
+      font-size: 36px;
+      background: rgba(255, 255, 255, 0.75);
+      border: none;
+      border-radius: 12px;
+      padding: 14px 22px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    #touchControls button:active {
+      transform: scale(0.9);
+      background: rgba(255, 255, 255, 0.9);
     }
   </style>
 </head>
@@ -2935,6 +2959,7 @@ requestAnimationFrame(gameLoop); // Begin continuous update & draw
 </script>
 </body>
 </html>
+
 
 
 
