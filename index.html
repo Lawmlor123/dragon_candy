@@ -31,7 +31,9 @@
       font-size: 18px;
     }
 
-    canvas { display: block; }
+    canvas {
+      display: block;
+    }
 
     #scoreBoard {
       position: absolute;
@@ -52,7 +54,9 @@
       display: block;
     }
 
-    #scoreText { color: #2c3e50; }
+    #scoreText {
+      color: #2c3e50;
+    }
 
     #overlay {
       position: absolute;
@@ -80,8 +84,13 @@
       transition: background 0.2s ease, transform 0.2s ease;
     }
 
-    #skipBtn:hover { background: rgba(255, 255, 255, 0.9); }
-    #skipBtn:active { transform: translateX(-50%) scale(0.96); }
+    #skipBtn:hover {
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    #skipBtn:active {
+      transform: translateX(-50%) scale(0.96);
+    }
 
     #winOverlay {
       display: none;
@@ -122,8 +131,13 @@
       display: none;
     }
 
-    #lifeMeter span { margin: 0 4px; }
-    #lifeMeter span.lost { opacity: 0.35; }
+    #lifeMeter span {
+      margin: 0 4px;
+    }
+
+    #lifeMeter span.lost {
+      opacity: 0.35;
+    }
   </style>
 </head>
 
@@ -137,7 +151,7 @@
 
   <script>
     const musicElements = {
-      day:  document.getElementById("dayMusic"),
+      day: document.getElementById("dayMusic"),
       pulse: document.getElementById("pulseMusic"),
       rock: document.getElementById("rockMusic")
     };
@@ -186,102 +200,6 @@
   <!-- (rest of your body content goes here: overlay, skip button, canvas, main script, etc.) -->
 </body>
 </html>
-  #levelLabel{
-    font-size:18px;
-    font-weight:bold;
-    color:#2c3e50;
-    display:block;
-  }
-  #scoreText{
-    color:#2c3e50;
-  }
-  #overlay{
-    position:absolute;
-    top:10px;
-    left:10px;
-    background:rgba(255,255,255,.6);
-    padding:6px 12px;
-    border-radius:8px;
-    font-size:20px;
-    transition:opacity .4s ease;
-  }
-  #skipBtn{
-    position:absolute;
-    top:10px;
-    left:50%;
-    transform:translateX(-50%);
-    font-size:18px;
-    background:rgba(255,255,255,0.75);
-    border:none;
-    border-radius:999px;
-    padding:6px 18px;
-    cursor:pointer;
-    box-shadow:0 4px 12px rgba(0,0,0,0.15);
-    transition:background 0.2s ease,transform 0.2s ease;
-  }
-  #skipBtn:hover{
-    background:rgba(255,255,255,0.9);
-  }
-  #skipBtn:active{
-    transform:translateX(-50%) scale(0.96);
-  }
-  #winOverlay{
-    display:none;
-    position:absolute;
-    top:40%;
-    left:50%;
-    transform:translate(-50%,-50%);
-    font-size:48px;
-    color:#e74c3c;
-    background:rgba(255,255,255,.85);
-    padding:30px 50px;
-    border-radius:16px;
-    text-align:center;
-    cursor:pointer;
-  }
-  #muteBtn{
-    position:absolute;
-    bottom:10px;
-    left:10px;
-    font-size:20px;
-    background:rgba(255,255,255,0.6);
-    border:none;
-    border-radius:8px;
-    padding:6px 10px;
-    cursor:pointer;
-  }
-  #lifeMeter{
-    position:absolute;
-    top:10px;
-    left:50%;
-    transform:translateX(-50%);
-    font-size:28px;
-    letter-spacing:6px;
-    text-shadow:0 2px 4px rgba(0,0,0,0.2);
-    pointer-events:none;
-    display:none;
-  }
-  #lifeMeter span{
-    margin:0 4px;
-  }
-  #lifeMeter span.lost{
-    opacity:0.35;
-  }
-</style>
-</head>
-<body>
-<div id="overlay">🐉 Tap / Space to Fly</div>
-<button id="skipBtn" type="button">⏭️ Skip Level</button>
-<div id="scoreBoard">
-  <div id="levelLabel">Level 1 – Balloon Bash</div>
-  <div id="scoreText">Score: 0</div>
-</div>
-<div id="lifeMeter"></div>
-<div id="winOverlay">🎉 YOU WIN! 🎉</div>
-<button id="muteBtn">🔊</button>
-<canvas id="gameCanvas"></canvas>
-
-<script>
 /************************************************************
  * BASIC SETUP
  ************************************************************/
@@ -2909,6 +2827,7 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
 
