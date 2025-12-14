@@ -34,39 +34,60 @@
     }
   </style>
 
-  <!-- 🎵 MUSIC SETUP -->
-  <button id="startMusic">🎵 Start Game Music</button>
+<!-- 🎵 MUSIC SETUP -->
+<button id="startMusic" type="button">🎵 Start Game Music</button>
 
-  <audio id="dayMusic" src="Music/chase_fixed.mp3" preload="auto" loop></audio>
-  <audio id="pulseMusic" src="Music/Pulse.mp3" preload="auto" loop></audio>
-  <audio id="stormMusic" src="Music/storm.mp3" preload="auto" loop></audio>
+<audio id="dayMusic"  src="Music/chase_fixed.mp3" preload="auto" loop></audio>
+<audio id="pulseMusic" src="Music/Pulse.mp3"        preload="auto" loop></audio>
+<audio id="rockMusic"  src="Music/storm.mp3"        preload="auto" loop></audio>
 
-  <script>
-    // Grab the audio elements
-    const dayMusic   = document.getElementById("dayMusic");
-    const pulseMusic = document.getElementById("pulseMusic");
-    const stormMusic = document.getElementById("stormMusic");
+<script>
+  const musicElements = {
+    day:  document.getElementById("dayMusic"),
+    pulse: document.getElementById("pulseMusic"),
+    rock: document.getElementById("rockMusic")
+  };
 
-    // Attach listener to the start button
-    document.getElementById("startMusic").addEventListener("click", async () => {
-      console.log("🎵 Button clicked — attempting to play chase_fixed.mp3");
-      try {
-        // Pause any other tracks just in case
-        [pulseMusic, stormMusic].forEach(m => { m.pause(); m.currentTime = 0; });
-
-        // Attempt to play the main theme
-        await dayMusic.play();
-        console.log("✅ Music started successfully");
-      } catch (err) {
-        console.error("❌ Music failed to start:", err);
-        alert(
-          "Your browser blocked the audio from auto‑playing.\n" +
-          "Click the button again or check the console for details."
-        );
-      }
+  function stopAllTracks(exceptKey = null) {
+    Object.entries(musicElements).forEach(([key, track]) => {
+      if (!track || key === exceptKey) return;
+      track.pause();
+      track.currentTime = 0;
     });
-  </script>
-  <!-- ✅ END MUSIC SETUP -->
+  }
+
+  const startMusicBtn = document.getElementById("startMusic");
+
+  startMusicBtn.addEventListener("click", async () => {
+    const dayTrack = musicElements.day;
+    if (!dayTrack) {
+      console.warn("🚫 dayMusic element not found.");
+      return;
+    }
+
+    stopAllTracks("day");
+
+    try {
+      if (typeof ensureAudioContext === "function") {
+        ensureAudioContext();
+      }
+      await dayTrack.play();
+      if (typeof unlockMusic === "function") {
+        unlockMusic();
+      }
+      startMusicBtn.disabled = true;
+      startMusicBtn.textContent = "🎵 Music Ready";
+      console.log("✅ chase_fixed.mp3 is now playing.");
+    } catch (error) {
+      console.error("❌ Unable to start music:", error);
+      alert(
+        "The browser blocked the audio from starting.\n" +
+        "Please click the button again (with sound enabled)."
+      );
+    }
+  });
+</script>
+<!-- ✅ END MUSIC SETUP -->
   canvas{display:block;}
   #scoreBoard{
     position:absolute;
@@ -2802,6 +2823,7 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
 
