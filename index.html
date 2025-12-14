@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>Little Dragon Flyer 🐉</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Little Dragon Flyer 🐉</title>
 
-</head>
-<body>
   <style>
     :root {
       color-scheme: light;
@@ -19,7 +17,7 @@
       font-family: "Comic Sans MS", cursive;
     }
 
-    /* 👇 Style added so the music button is visible */
+    /* Music button */
     #startMusic {
       position: absolute;
       top: 10px;
@@ -32,67 +30,163 @@
       cursor: pointer;
       font-size: 18px;
     }
+
+    canvas { display: block; }
+
+    #scoreBoard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 22px;
+      background: rgba(255, 255, 255, 0.6);
+      padding: 6px 12px;
+      border-radius: 8px;
+      text-align: right;
+      line-height: 1.3;
+    }
+
+    #levelLabel {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2c3e50;
+      display: block;
+    }
+
+    #scoreText { color: #2c3e50; }
+
+    #overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.6);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 20px;
+      transition: opacity 0.4s ease;
+    }
+
+    #skipBtn {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      background: rgba(255, 255, 255, 0.75);
+      border: none;
+      border-radius: 999px;
+      padding: 6px 18px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    #skipBtn:hover { background: rgba(255, 255, 255, 0.9); }
+    #skipBtn:active { transform: translateX(-50%) scale(0.96); }
+
+    #winOverlay {
+      display: none;
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      color: #e74c3c;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 30px 50px;
+      border-radius: 16px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #muteBtn {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      font-size: 20px;
+      background: rgba(255, 255, 255, 0.6);
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    #lifeMeter {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 28px;
+      letter-spacing: 6px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      pointer-events: none;
+      display: none;
+    }
+
+    #lifeMeter span { margin: 0 4px; }
+    #lifeMeter span.lost { opacity: 0.35; }
   </style>
+</head>
 
-<!-- 🎵 MUSIC SETUP -->
-<button id="startMusic" type="button">🎵 Start Game Music</button>
+<body>
+  <!-- 🎵 MUSIC SETUP -->
+  <button id="startMusic" type="button">🎵 Start Game Music</button>
 
-<audio id="dayMusic"  src="Music/chase_fixed.mp3" preload="auto" loop></audio>
-<audio id="pulseMusic" src="Music/Pulse.mp3"        preload="auto" loop></audio>
-<audio id="rockMusic"  src="Music/storm.mp3"        preload="auto" loop></audio>
+  <audio id="dayMusic"  src="Music/chase_fixed.mp3" preload="auto" loop></audio>
+  <audio id="pulseMusic" src="Music/Pulse.mp3"        preload="auto" loop></audio>
+  <audio id="rockMusic"  src="Music/storm.mp3"        preload="auto" loop></audio>
 
-<script>
-  const musicElements = {
-    day:  document.getElementById("dayMusic"),
-    pulse: document.getElementById("pulseMusic"),
-    rock: document.getElementById("rockMusic")
-  };
+  <script>
+    const musicElements = {
+      day:  document.getElementById("dayMusic"),
+      pulse: document.getElementById("pulseMusic"),
+      rock: document.getElementById("rockMusic")
+    };
 
-  function stopAllTracks(exceptKey = null) {
-    Object.entries(musicElements).forEach(([key, track]) => {
-      if (!track || key === exceptKey) return;
-      track.pause();
-      track.currentTime = 0;
+    function stopAllTracks(exceptKey = null) {
+      Object.entries(musicElements).forEach(([key, track]) => {
+        if (!track || key === exceptKey) return;
+        track.pause();
+        track.currentTime = 0;
+      });
+    }
+
+    const startMusicBtn = document.getElementById("startMusic");
+
+    startMusicBtn.addEventListener("click", async () => {
+      const dayTrack = musicElements.day;
+      if (!dayTrack) {
+        console.warn("🚫 dayMusic element not found.");
+        return;
+      }
+
+      stopAllTracks("day");
+
+      try {
+        if (typeof ensureAudioContext === "function") {
+          ensureAudioContext();
+        }
+        await dayTrack.play();
+        if (typeof unlockMusic === "function") {
+          unlockMusic();
+        }
+        startMusicBtn.disabled = true;
+        startMusicBtn.textContent = "🎵 Music Ready";
+        console.log("✅ chase_fixed.mp3 is now playing.");
+      } catch (error) {
+        console.error("❌ Unable to start music:", error);
+        alert(
+          "The browser blocked the audio from starting.\n" +
+          "Please click the button again (with sound enabled)."
+        );
+      }
     });
-  }
+  </script>
+  <!-- ✅ END MUSIC SETUP -->
 
-  const startMusicBtn = document.getElementById("startMusic");
-
-  startMusicBtn.addEventListener("click", async () => {
-    const dayTrack = musicElements.day;
-    if (!dayTrack) {
-      console.warn("🚫 dayMusic element not found.");
-      return;
-    }
-
-    stopAllTracks("day");
-
-    try {
-      if (typeof ensureAudioContext === "function") {
-        ensureAudioContext();
-      }
-      await dayTrack.play();
-      if (typeof unlockMusic === "function") {
-        unlockMusic();
-      }
-      startMusicBtn.disabled = true;
-      startMusicBtn.textContent = "🎵 Music Ready";
-      console.log("✅ chase_fixed.mp3 is now playing.");
-    } catch (error) {
-      console.error("❌ Unable to start music:", error);
-      alert(
-        "The browser blocked the audio from starting.\n" +
-        "Please click the button again (with sound enabled)."
-      );
-    }
-  });
-</script>
-<!-- ✅ END MUSIC SETUP -->
-  <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Little Dragon Flyer 🐉</title>
-  <style>
+  <!-- (rest of your body content goes here: overlay, skip button, canvas, main script, etc.) -->
+</body>
+</html>
+  
   canvas{display:block;}
   #scoreBoard{
     position:absolute;
@@ -2828,6 +2922,7 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
 
