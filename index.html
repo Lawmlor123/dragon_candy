@@ -167,10 +167,18 @@
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
     }
 
-    #touchControls button:active {
-      transform: scale(0.9);
-      background: rgba(255, 255, 255, 0.9);
-    }
+#touchControls button:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* prevent iOS scroll/zoom issues and make canvas touchable */
+canvas,
+#touchControls {
+  touch-action: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
   </style>
 </head>
 <body>
@@ -196,6 +204,7 @@
     <button id="btnFlap">🕊️</button>
     <button id="btnRight">➡️</button>
   </div>
+
 
   <audio id="dayMusic"  src="Music/chase_fixed.mp3" preload="auto" loop></audio>
   <audio id="pulseMusic" src="Music/Pulse.mp3"        preload="auto" loop></audio>
@@ -2856,6 +2865,19 @@ canvas.addEventListener("pointerdown", evt => {
   handlePointer(evt);
 });
 
+canvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  if (!t) return;
+  focusCanvas();
+  handlePointer({ type: "pointerdown", clientX: t.clientX, clientY: t.clientY });
+});
+canvas.addEventListener("touchmove", e => e.preventDefault());
+canvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  handlePointer({ type: "pointerup" });
+});
+
 const controlKeys = new Set([
   "Space",
   "ArrowUp",
@@ -2901,9 +2923,19 @@ document.addEventListener("keydown", e => {
   }
 });
 
-document.addEventListener("keyup", e => {
-  keysPressed.delete(e.code);
-});
+const touchControls = document.getElementById("touchControls");
+const btnLeft  = document.getElementById("btnLeft");
+const btnFlap  = document.getElementById("btnFlap");
+const btnRight = document.getElementById("btnRight");
+
+btnLeft.ontouchstart  = () => keysPressed.add("ArrowLeft");
+btnLeft.ontouchend    = () => keysPressed.delete("ArrowLeft");
+btnRight.ontouchstart = () => keysPressed.add("ArrowRight");
+btnRight.ontouchend   = () => keysPressed.delete("ArrowRight");
+btnFlap.ontouchstart  = () => {
+  if (isRhythmLevel()) return handleRhythmInput();
+  flapDragon();
+};
 
 /************************************************************
  * LEVEL SKIP
@@ -2957,6 +2989,7 @@ requestAnimationFrame(gameLoop); // Begin continuous update & draw
 </script>
 </body>
 </html>
+
 
 
 
