@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Little Dragon Flyer 🐉</title>
 
   <style>
@@ -10,29 +10,23 @@
       color-scheme: light;
     }
 
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: linear-gradient(to bottom, #87ceeb, #dff9fb);
-      font-family: "Comic Sans MS", cursive;
+    * {
+      box-sizing: border-box;
     }
 
-    /* Music button */
-    #startMusic {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 9999;
-      background: rgba(255, 255, 255, 0.85);
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 8px 14px;
-      cursor: pointer;
-      font-size: 18px;
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #87ceeb, #dff9fb);
+      font-family: "Comic Sans MS", "Comic Neue", cursive, system-ui;
+      color: #2c3e50;
     }
 
     canvas {
       display: block;
+      width: 100vw;
+      height: 100vh;
     }
 
     #scoreBoard {
@@ -40,21 +34,23 @@
       top: 10px;
       right: 10px;
       font-size: 22px;
-      background: rgba(255, 255, 255, 0.6);
-      padding: 6px 12px;
-      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.65);
+      padding: 6px 14px;
+      border-radius: 10px;
       text-align: right;
       line-height: 1.3;
+      z-index: 5;
     }
 
     #levelLabel {
       font-size: 18px;
-      font-weight: bold;
-      color: #2c3e50;
+      font-weight: 700;
       display: block;
+      color: #2c3e50;
     }
 
     #scoreText {
+      display: block;
       color: #2c3e50;
     }
 
@@ -63,9 +59,10 @@
       top: 10px;
       left: 10px;
       background: rgba(255, 255, 255, 0.6);
-      padding: 6px 12px;
-      border-radius: 8px;
+      padding: 8px 14px;
+      border-radius: 10px;
       font-size: 20px;
+      z-index: 6;
       transition: opacity 0.4s ease;
     }
 
@@ -82,6 +79,7 @@
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       transition: background 0.2s ease, transform 0.2s ease;
+      z-index: 6;
     }
 
     #skipBtn:hover {
@@ -100,23 +98,12 @@
       transform: translate(-50%, -50%);
       font-size: 48px;
       color: #e74c3c;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.88);
       padding: 30px 50px;
       border-radius: 16px;
       text-align: center;
       cursor: pointer;
-    }
-
-    #muteBtn {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      font-size: 20px;
-      background: rgba(255, 255, 255, 0.6);
-      border: none;
-      border-radius: 8px;
-      padding: 6px 10px;
-      cursor: pointer;
+      z-index: 10;
     }
 
     #lifeMeter {
@@ -129,6 +116,7 @@
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       pointer-events: none;
       display: none;
+      z-index: 6;
     }
 
     #lifeMeter span {
@@ -138,66 +126,139 @@
     #lifeMeter span.lost {
       opacity: 0.35;
     }
+
+    #startMusic {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 9999;
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    #muteBtn {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      font-size: 20px;
+      background: rgba(255, 255, 255, 0.6);
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      z-index: 6;
+    }
+
+    @media (max-width: 600px) {
+      #scoreBoard {
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      #startMusic,
+      #muteBtn {
+        font-size: 16px;
+      }
+
+      #skipBtn {
+        font-size: 16px;
+        padding: 6px 14px;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <!-- 🎵 MUSIC SETUP -->
+  <!-- UI chrome -->
   <button id="startMusic" type="button">🎵 Start Game Music</button>
+  <button id="muteBtn" type="button" aria-label="Mute music">🔊</button>
 
+  <div id="scoreBoard" aria-live="polite">
+    <span id="levelLabel">Level 1</span>
+    <span id="scoreText">Score: 0</span>
+  </div>
+
+  <div id="overlay">Preparing launch…</div>
+  <button id="skipBtn" type="button">Skip intro</button>
+  <div id="lifeMeter" aria-label="Life meter"></div>
+  <div id="winOverlay" role="dialog" aria-live="assertive">
+    <strong>Victory!</strong><br />
+    <small>Click to continue</small>
+  </div>
+
+  <canvas id="gameCanvas" aria-label="Little Dragon Flyer playfield"></canvas>
+
+  <!-- Music assets (same paths you already use) -->
   <audio id="dayMusic"  src="Music/chase_fixed.mp3" preload="auto" loop></audio>
   <audio id="pulseMusic" src="Music/Pulse.mp3"        preload="auto" loop></audio>
   <audio id="rockMusic"  src="Music/storm.mp3"        preload="auto" loop></audio>
 
+  <!-- Paste the actual Little Dragon Flyer logic here -->
   <script>
-    const musicElements = {
-      day: document.getElementById("dayMusic"),
-      pulse: document.getElementById("pulseMusic"),
-      rock: document.getElementById("rockMusic")
-    };
+    /* ----------------------------------------------------------
+       ⬇️  PASTE THE ENTIRE GAME SCRIPT RIGHT BELOW THIS COMMENT ⬇️
+       (It should start with your “/**** BASIC SETUP ****/” block
+       and include all mechanics, level data, render/update loops,
+       etc. Keeping it inside this <script> tag ensures it runs.)
+    ---------------------------------------------------------- */
 
-    function stopAllTracks(exceptKey = null) {
-      Object.entries(musicElements).forEach(([key, track]) => {
-        if (!track || key === exceptKey) return;
-        track.pause();
-        track.currentTime = 0;
-      });
-    }
-
-    const startMusicBtn = document.getElementById("startMusic");
-
-    startMusicBtn.addEventListener("click", async () => {
-      const dayTrack = musicElements.day;
-      if (!dayTrack) {
-        console.warn("🚫 dayMusic element not found.");
-        return;
-      }
-
-      stopAllTracks("day");
-
-      try {
-        if (typeof ensureAudioContext === "function") {
-          ensureAudioContext();
-        }
-        await dayTrack.play();
-        if (typeof unlockMusic === "function") {
-          unlockMusic();
-        }
-        startMusicBtn.disabled = true;
-        startMusicBtn.textContent = "🎵 Music Ready";
-        console.log("✅ chase_fixed.mp3 is now playing.");
-      } catch (error) {
-        console.error("❌ Unable to start music:", error);
-        alert(
-          "The browser blocked the audio from starting.\n" +
-          "Please click the button again (with sound enabled)."
-        );
-      }
-    });
+    console.warn("Little Dragon Flyer logic not loaded yet. Paste it inside this script block.");
   </script>
-  <!-- ✅ END MUSIC SETUP -->
 
-  <!-- (rest of your body content goes here: overlay, skip button, canvas, main script, etc.) -->
+  <!-- Music unlock button logic (safe even if game script isn’t pasted yet) -->
+  <script>
+    (function initMusicGate() {
+      const musicElements = {
+        day: document.getElementById("dayMusic"),
+        pulse: document.getElementById("pulseMusic"),
+        rock: document.getElementById("rockMusic")
+      };
+
+      function stopAllTracks(exceptKey = null) {
+        Object.entries(musicElements).forEach(([key, track]) => {
+          if (!track || key === exceptKey) return;
+          track.pause();
+          track.currentTime = 0;
+        });
+      }
+
+      const startMusicBtn = document.getElementById("startMusic");
+      if (!startMusicBtn) return;
+
+      startMusicBtn.addEventListener("click", async () => {
+        const dayTrack = musicElements.day;
+        if (!dayTrack) {
+          console.warn("🚫 dayMusic element not found.");
+          return;
+        }
+
+        stopAllTracks("day");
+
+        try {
+          if (typeof ensureAudioContext === "function") {
+            ensureAudioContext();
+          }
+          await dayTrack.play();
+          if (typeof unlockMusic === "function") {
+            unlockMusic();
+          }
+          startMusicBtn.disabled = true;
+          startMusicBtn.textContent = "🎵 Music Ready";
+          console.log("✅ chase_fixed.mp3 is now playing.");
+        } catch (error) {
+          console.error("❌ Unable to start music:", error);
+          alert(
+            "The browser blocked the audio from starting.\n" +
+            "Please click the button again (with sound enabled)."
+          );
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
 /************************************************************
@@ -2827,6 +2888,7 @@ requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
+
 
 
 
