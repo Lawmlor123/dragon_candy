@@ -147,25 +147,35 @@
       #skipBtn { font-size: 16px; padding: 6px 14px; }
     }
 
-    /* --- touch control button styles --- */
-    #touchControls {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: none;        /* hidden until needed */
-      gap: 20px;
-      z-index: 12;
-    }
+/* --- touch control button styles --- */
+#touchControls {
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;              /* make sure it’s shown */
+  gap: 20px;
+  z-index: 12;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
 
-    #touchControls button {
-      font-size: 36px;
-      background: rgba(255, 255, 255, 0.75);
-      border: none;
-      border-radius: 12px;
-      padding: 14px 22px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
-    }
+@media (hover: hover) and (pointer: fine) {
+  #touchControls {
+    display: none;            /* hide on desktop if desired */
+  }
+}
+
+#touchControls button {
+  font-size: 36px;
+  background: rgba(255, 255, 255, 0.75);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  touch-action: manipulation; /* allows taps without scroll */
+}
 
 #touchControls button:active {
   transform: scale(0.9);
@@ -173,8 +183,7 @@
 }
 
 /* prevent iOS scroll/zoom issues and make canvas touchable */
-canvas,
-#touchControls {
+canvas {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -2990,6 +2999,7 @@ requestAnimationFrame(gameLoop); // Begin continuous update & draw
 </script>
 </body>
 </html>
+
 
 
 
