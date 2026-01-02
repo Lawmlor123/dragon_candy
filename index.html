@@ -493,27 +493,20 @@ const handcraftedLevels = new Map([
   [
     5,
     {
-      name: "Cloud Rhythm",
-      mechanic: "rhythmBounce",
-      bgGradient: ["#ffdde1", "#ee9ca7"],
+      name: "Moonrock Escort",
+      mechanic: "escortPulse",
+      bgGradient: ["#0f2027", "#203a43"],
       control: "rhythm",
-      rhythm: {
-        mode: "dualLane",
-        bpm: 96,
-        targetBounces: 6,
-        windowPerfect: 150,
-        windowGood: 300,
-        preDisplay: 1200,
-        maxMisses: 3,
-        leadTime: 2400,
-        beatMap: [
-          { time: 1800, lane: "left" },
-          { time: 2600, lane: "left" },
-          { time: 3400, lane: "left" },
-          { time: 4400, lane: "right" },
-          { time: 5200, lane: "right" },
-          { time: 6000, lane: "right" }
-        ]
+      escort: {
+        durationMs: 25000,
+        maxStrikes: 5,
+        targetShields: 9,
+        shieldDecayMs: 3800,
+        finaleHoldMs: 3500,
+        moonRockSpeed: 560,
+        hazardBurstInterval: 1500,
+        goalName: "Golden Gate",
+        stormName: "Moon Rock Tempest"
       }
     }
   ],
@@ -620,7 +613,8 @@ const nameFragments = {
   ],
   suffixByMechanic: {
     rescueGoal: ["Rescue", "Guardians", "Guard", "Patrol", "Hatchlings"],
-    rhythmBounce: ["Rhythm", "Cadence", "Groove", "Tempo", "Anthem"]
+    rhythmBounce: ["Rhythm", "Cadence", "Groove", "Tempo", "Anthem"],
+    escortPulse: ["Escort", "Guard", "Bulwark", "Sentinel", "Pulse"]
   }
 };
 
@@ -678,11 +672,19 @@ const levelArchetypes = {
     bgGradient,
     control: "rhythm",
     rhythm: generateRhythmConfig(levelNumber)
+  }),
+  escortPulse: ({ levelNumber, name, bgGradient }) => ({
+    name,
+    mechanic: "escortPulse",
+    bgGradient,
+    control: "rhythm",
+    escort: generateEscortConfig(levelNumber)
   })
 };
 
 function pickMechanic(levelNumber) {
   if (levelNumber % 10 === 0) return "rescueGoal";
+  if (levelNumber % 10 === 5) return "escortPulse";
   if (levelNumber % 5 === 0) return "rhythmBounce";
   const rotation = ["scoreGoal", "coinGoal", "scoreCollect", "comboGoal", "collectGoal"];
   return rotation[(levelNumber - 1) % rotation.length];
@@ -720,6 +722,22 @@ function generateRhythmConfig(levelNumber) {
     maxMisses: Math.min(6, 3 + Math.floor(levelNumber / 15)),
     leadTime: 2400,
     beatMap
+  };
+}
+
+function generateEscortConfig(levelNumber) {
+  const durationMs = 22000 + Math.min(4000, levelNumber * 120);
+  const hazardBurstInterval = Math.max(1100, 2000 - levelNumber * 45);
+  return {
+    durationMs,
+    maxStrikes: 5 + Math.floor(levelNumber / 25),
+    targetShields: 7 + Math.floor(levelNumber / 4),
+    shieldDecayMs: 3600,
+    finaleHoldMs: 2800,
+    moonRockSpeed: 480 + levelNumber * 8,
+    hazardBurstInterval,
+    goalName: "Sky Gate",
+    stormName: "Lunar Gale"
   };
 }
 
@@ -775,6 +793,47 @@ let gameOver = false,
   objects = [];
 let flightStarted = false;
 let levelEnding = false;
+
+const escortState = {
+  active: false,
+  elapsed: 0,
+  spriteProgress: 0,
+  spritePos: { x: 0, y: 0 },
+  shields: 0,
+  strikes: 0,
+  finaleHold: { active: false, heldMs: 0 },
+  hazards: [],
+  motes: [],
+  failTriggered: false,
+  announcement: null
+};
+
+function resetEscortState(levelConfig = levels[currentLevel]) {
+  const isEscort = levelConfig?.mechanic === "escortPulse";
+  escortState.active = isEscort;
+  escortState.elapsed = 0;
+  escortState.spriteProgress = 0;
+  escortState.spritePos.x = 0;
+  escortState.spritePos.y = 0;
+  escortState.shields = 0;
+  escortState.strikes = 0;
+  escortState.finaleHold.active = false;
+  escortState.finaleHold.heldMs = 0;
+  escortState.hazards.length = 0;
+  escortState.motes.length = 0;
+  escortState.failTriggered = false;
+  escortState.announcement = null;
+}
+
+function isEscortLevel(levelConfig = levels[currentLevel]) {
+  return levelConfig?.mechanic === "escortPulse";
+}
+
+function getEscortConfig(levelConfig = levels[currentLevel]) {
+  if (levelConfig?.escort) return levelConfig.escort;
+  const derivedLevelNumber = levelConfig?.levelNumber ?? currentLevel + 1;
+  return generateEscortConfig(derivedLevelNumber);
+}
 
 /************************************************************
  * RHYTHM STATE
@@ -2638,7 +2697,9 @@ function drawScene(now) {
   if (showToyStore) drawToyFactory();
   if (currentLevel !== 4) drawClouds();
 
-  if (isRescueLevel()) {
+  if (isEscortLevel()) {
+    drawEscortScene(now);
+  } else if (isRescueLevel()) {
     drawRescuePodBack();
     drawRescueSlotGuides();
     drawBabyDragons();
@@ -2663,6 +2724,346 @@ function drawScene(now) {
     ctx.fillText(`Combo x${comboCount}!`, canvas.width / 2, 70);
   }
 }
+
+/************************************************************
+ * ESCORT RENDERING
+ ************************************************************/
+function drawEscortScene(now) {
+  drawEscortTrail();
+  drawGoldenGate();
+  drawMoonRockHazards();
+  drawNimbusSprite(now);
+  drawEscortProgressHUD();
+  drawFinaleIndicator();
+}
+
+function drawEscortTrail() {
+  const gradient = ctx.createLinearGradient(0, canvas.height * 0.2, 0, canvas.height * 0.8);
+  gradient.addColorStop(0, "rgba(255,255,255,0.05)");
+  gradient.addColorStop(0.5, "rgba(120,180,255,0.12)");
+  gradient.addColorStop(1, "rgba(255,255,255,0.05)");
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.roundRect(canvas.width * 0.12, canvas.height * 0.28, canvas.width * 0.76, canvas.height * 0.44, 45);
+  ctx.fill();
+}
+
+function drawGoldenGate() {
+  const baseX = canvas.width * 0.78;
+  const baseY = canvas.height * 0.36;
+  const gateWidth = canvas.width * 0.16;
+  const gateHeight = canvas.height * 0.38;
+  const pillarWidth = gateWidth * 0.18;
+  const innerGap = gateWidth - pillarWidth * 2;
+  const now = performance.now();
+
+  ctx.save();
+
+  // Pylons
+  const pillarGradient = ctx.createLinearGradient(0, baseY, 0, baseY + gateHeight);
+  pillarGradient.addColorStop(0, "#ffe9a3");
+  pillarGradient.addColorStop(1, "#d59a32");
+
+  ctx.fillStyle = pillarGradient;
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+
+  // Left pillar
+  ctx.beginPath();
+  ctx.roundRect(baseX, baseY, pillarWidth, gateHeight, 10);
+  ctx.fill();
+  ctx.stroke();
+
+  // Right pillar
+  ctx.beginPath();
+  ctx.roundRect(baseX + gateWidth - pillarWidth, baseY, pillarWidth, gateHeight, 10);
+  ctx.fill();
+  ctx.stroke();
+
+  // Crossbeams
+  ctx.fillStyle = "rgba(255,240,200,0.8)";
+  const beamCount = 4;
+  for (let i = 0; i <= beamCount; i++) {
+    const y = baseY + (i / beamCount) * gateHeight;
+    ctx.fillRect(baseX + pillarWidth - 6, y - 3, innerGap + 12, 6);
+  }
+
+  // Lattice detail
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < beamCount; i++) {
+    const yTop = baseY + (i / beamCount) * gateHeight;
+    const yBottom = baseY + ((i + 1) / beamCount) * gateHeight;
+    ctx.beginPath();
+    ctx.moveTo(baseX + pillarWidth, yTop);
+    ctx.lineTo(baseX + pillarWidth + innerGap, yBottom);
+    ctx.moveTo(baseX + pillarWidth + innerGap, yTop);
+    ctx.lineTo(baseX + pillarWidth, yBottom);
+    ctx.stroke();
+  }
+
+  // Portal core
+  const portalX = baseX + pillarWidth + innerGap / 2;
+  const portalY = baseY + gateHeight * 0.25;
+  const portalRadius = innerGap * 0.45;
+
+  const portalGradient = ctx.createRadialGradient(
+    portalX,
+    portalY,
+    10,
+    portalX,
+    portalY,
+    portalRadius * 1.2
+  );
+  portalGradient.addColorStop(0, "rgba(255,255,255,0.95)");
+  portalGradient.addColorStop(0.4, "rgba(255,215,150,0.8)");
+  portalGradient.addColorStop(1, "rgba(255,180,70,0.15)");
+  ctx.fillStyle = portalGradient;
+  ctx.beginPath();
+  ctx.arc(portalX, portalY, portalRadius * 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shimmer beams
+  ctx.globalCompositeOperation = "lighter";
+  const shimmer = 0.6 + Math.sin(now / 260) * 0.2;
+  ctx.strokeStyle = `rgba(255,233,160,${shimmer})`;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(portalX, baseY - 20);
+  ctx.lineTo(portalX, baseY + gateHeight + 20);
+  ctx.stroke();
+
+  ctx.strokeStyle = `rgba(255,255,255,${shimmer * 0.7})`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(portalX - innerGap * 0.25, baseY);
+  ctx.lineTo(portalX + innerGap * 0.25, baseY + gateHeight);
+  ctx.moveTo(portalX + innerGap * 0.25, baseY);
+  ctx.lineTo(portalX - innerGap * 0.25, baseY + gateHeight);
+  ctx.stroke();
+
+  // Sparkles
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  for (let i = 0; i < 12; i++) {
+    const angle = (now / 700 + i) % (Math.PI * 2);
+    const radius = portalRadius * (0.6 + (i % 3) * 0.15);
+    const sx = portalX + Math.cos(angle) * radius;
+    const sy = portalY + Math.sin(angle) * radius;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 2 + (i % 3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawNimbusSprite(now) {
+  const cfg = getEscortConfig(levels[currentLevel]) || {};
+  const maxHearts = cfg.maxStrikes ? Math.max(1, cfg.maxStrikes) : 5;
+  const strikes = Math.min(maxHearts, Math.max(0, escortState.strikes || 0));
+  const integrity = 1 - strikes / maxHearts;
+  const { x, y } = escortState.spritePos;
+
+  const bodyW = 120;
+  const bodyH = 70;
+  const scale = 0.48;
+  const wobble = Math.sin(now / 260) * 3;
+
+  const hitAge = escortState.lastHitAt ? now - escortState.lastHitAt : Infinity;
+  const impactFlash = Math.max(0, 1 - hitAge / 350);
+
+  ctx.save();
+  ctx.translate(x, y + wobble);
+  ctx.scale(scale, scale);
+
+  // Soft drop shadow
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(0, bodyH * 0.55, bodyW * 0.9, bodyH * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nimbus base body
+  ctx.save();
+  const bodyGradient = ctx.createRadialGradient(-25, -18, 15, 0, 0, bodyW);
+  bodyGradient.addColorStop(0, "rgba(255,255,255,0.98)");
+  bodyGradient.addColorStop(0.4, "rgba(230,242,255,0.92)");
+  bodyGradient.addColorStop(1, "rgba(160,200,255,0.78)");
+  ctx.fillStyle = bodyGradient;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bite marks carved out by damage
+  if (strikes > 0) {
+    ctx.globalCompositeOperation = "destination-out";
+    const chunks = Math.min(strikes, 3);
+    for (let i = 0; i < chunks; i++) {
+      const magnitude = strikes / maxHearts;
+      const cx = -bodyW * (0.35 + i * 0.12);
+      const cy = (i % 2 === 0 ? -1 : 1) * bodyH * 0.15;
+      ctx.beginPath();
+      ctx.ellipse(
+        cx,
+        cy,
+        bodyW * 0.35 * magnitude,
+        bodyH * 0.65,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+  ctx.restore(); // end base/body composite
+
+  // Cracks for each hit
+  if (strikes > 0) {
+    ctx.strokeStyle = "rgba(140,160,210,0.9)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < strikes; i++) {
+      const angle = (-0.4 + (i / Math.max(1, strikes - 1)) * 0.8) * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(6, 0);
+      ctx.lineTo(
+        6 + Math.cos(angle) * bodyW * 0.55,
+        Math.sin(angle) * bodyH * 0.5
+      );
+      ctx.stroke();
+    }
+  }
+
+  // Hurt overlay / recent-hit flash
+  if (impactFlash > 0 || integrity < 0.7) {
+    const alpha = Math.min(
+      Math.max(impactFlash * 0.8, 0.05) + Math.max(0, 0.7 - integrity),
+      0.85
+    );
+    ctx.fillStyle = `rgba(255,70,70,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Face
+  ctx.fillStyle = "#1e1e1e";
+  ctx.beginPath();
+  ctx.arc(-18, -10, 5, 0, Math.PI * 2);
+  ctx.arc(18, -10, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(30,30,30,0.9)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 4, 16, 0, Math.PI);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMoonRockHazards() {
+  escortState.hazards.forEach(h => {
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(h.spin || 0);
+    const gradient = ctx.createRadialGradient(-5, -5, 2, 0, 0, h.radius + 6);
+    gradient.addColorStop(0, "#fdf2e9");
+    gradient.addColorStop(1, "#c49b63");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, h.radius * 1.15, h.radius, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(0,0,0,0.12)";
+    for (let i = 0; i < 4; i++) {
+      const pocketX = Math.cos(i * 1.4) * h.radius * 0.4;
+      const pocketY = Math.sin(i * 1.4) * h.radius * 0.3;
+      ctx.beginPath();
+      ctx.arc(pocketX, pocketY, h.radius * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+function drawEscortProgressHUD() {
+  const cfg = getEscortConfig(levels[currentLevel]);
+  const barWidth = Math.min(420, canvas.width * 0.6);
+  const barX = canvas.width / 2 - barWidth / 2;
+  const barY = 40;
+
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.roundRect(barX, barY, barWidth, 20, 10);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255,215,120,0.85)";
+  ctx.roundRect(barX, barY, barWidth * escortState.spriteProgress, 20, 10);
+  ctx.fill();
+
+  ctx.font = "18px Comic Sans MS";
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    `${cfg.goalName ?? "Gate"} ${(escortState.spriteProgress * 100).toFixed(0)}%`,
+    canvas.width / 2,
+    barY - 8
+  );
+
+  ctx.textAlign = "right";
+  ctx.fillText(
+    `Shields ${escortState.shields}/${cfg.targetShields}`,
+    canvas.width - 30,
+    32
+  );
+  ctx.textAlign = "left";
+  ctx.fillText(
+    `${cfg.stormName ?? "Storm"} – ${cfg.maxStrikes - escortState.strikes} hearts`,
+    30,
+    32
+  );
+  ctx.textAlign = "center";
+}
+
+function drawFinaleIndicator() {
+  if (!escortState.finaleHold.active) return;
+  const cfg = getEscortConfig(levels[currentLevel]);
+  const holdPct = escortState.finaleHold.heldMs / cfg.finaleHoldMs;
+  const meterWidth = 320;
+  const meterHeight = 18;
+  const x = canvas.width / 2 - meterWidth / 2;
+  const y = 70;
+
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.roundRect(x, y, meterWidth, meterHeight, 9);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(111,255,233,0.85)";
+  ctx.roundRect(x, y, meterWidth * holdPct, meterHeight, 9);
+  ctx.fill();
+
+  ctx.font = "20px Comic Sans MS";
+  ctx.fillStyle = "#fff";
+  ctx.fillText("Hold to lift Nimbus!", canvas.width / 2, y + 40);
+}
+
+// Utility polyfill for roundRect on some browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, width, height, radius) {
+    const r = typeof radius === "number" ? radius : 0;
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.lineTo(x + width - r, y);
+    this.quadraticCurveTo(x + width, y, x + width, y + r);
+    this.lineTo(x + width, y + height - r);
+    this.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    this.lineTo(x + r, y + height);
+    this.quadraticCurveTo(x, y + height, x, y + height - r);
+    this.lineTo(x, y + r);
+    this.quadraticCurveTo(x, y, x + r, y);
+    this.closePath();
+    return this;
+  };
+}
 /************************************************************
  * GAME STATE MANAGEMENT
  ************************************************************/
@@ -2685,6 +3086,7 @@ function resolveLevelForIndex(index) {
     mechanic: "scoreGoal",
     control: "flap",
     bgGradient: defaultLevelGradient,
+    levelNumber: index + 1,
     ...baseLevel
   };
   resolved.bgGradient = ensureGradient(resolved.bgGradient);
@@ -2703,7 +3105,13 @@ function getControlHint(controlType = "flap") {
 
 function initObjectsForLevel(L) {
   objects.length = 0;
-  if (L.mechanic === "rescueGoal" || L.mechanic === "rhythmBounce") return;
+  if (
+    L.mechanic === "rescueGoal" ||
+    L.mechanic === "rhythmBounce" ||
+    L.mechanic === "escortPulse"
+  )
+    return;
+
   const baseCount = L.spawnCount ?? (L.mechanic === "scoreCollect" ? 10 : 8);
   for (let i = 0; i < baseCount; i++) {
     objects.push({
@@ -2738,6 +3146,9 @@ function updateScoreboardForLevel(L) {
     scoreText.textContent = `Collected ${collected}/${L.collectGoal ?? 0}`;
   } else if (L.mechanic === "rhythmBounce") {
     updateRhythmScoreboard();
+  } else if (L.mechanic === "escortPulse") {
+    const escortCfg = getEscortConfig(L);
+    scoreText.textContent = `Shields ${escortState.shields}/${escortCfg.targetShields}`;
   } else {
     scoreText.textContent = `Score ${score}/${L.winScore ?? 0}`;
   }
@@ -2761,10 +3172,14 @@ function loadLevel(index) {
   flightStarted = false;
   overlay.style.opacity = 1;
 
-  overlay.textContent = getControlHint(L.control);
+  const escortHint = isEscortLevel(L)
+    ? "🌙 Tap to shield Nimbus • ←→ glide • Hold Space to finish!"
+    : getControlHint(L.control);
+  overlay.textContent = escortHint;
 
   applyLevelTheme(L, index);
   resetRescueState();
+  resetEscortState(L);
 
   if (L.mechanic === "rescueGoal") {
     rescueSlotQueue = podSlotOffsets.map((_, idx) => idx);
@@ -2775,7 +3190,6 @@ function loadLevel(index) {
   resetRhythmState(L);
   updateScoreboardForLevel(L);
 }
-
 /************************************************************
  * GAME LOOP + PHYSICS
  ************************************************************/
@@ -2797,15 +3211,14 @@ const keysPressed = new Set();
 function applyDirectionalInput() {
   if (isRhythmLevel()) return;
 
-  const leftActive =
-    keysPressed.has("ArrowLeft") || keysPressed.has("KeyA");
-  const rightActive =
-    keysPressed.has("ArrowRight") || keysPressed.has("KeyD");
+  const leftActive = keysPressed.has("ArrowLeft") || keysPressed.has("KeyA");
+  const rightActive = keysPressed.has("ArrowRight") || keysPressed.has("KeyD");
 
   if (!leftActive && !rightActive) return;
 
-  const accel = isRescueLevel() ? 0.55 : 0.35;
-  const maxSpeed = isRescueLevel() ? 7 : 5;
+  const escortBoost = isEscortLevel() ? 0.6 : 0;
+  const accel = isRescueLevel() ? 0.55 : 0.35 + escortBoost * 0.25;
+  const maxSpeed = isRescueLevel() ? 7 : 5 + escortBoost * 2;
 
   if (leftActive && !rightActive) {
     dragon.vx = Math.max(dragon.vx - accel, -maxSpeed);
@@ -2849,6 +3262,11 @@ function updateGame(delta, time) {
   applyDirectionalInput();
   updateDragonPhysics();
 
+  if (isEscortLevel()) {
+    updateEscortLevel(delta, time);
+    return;
+  }
+
   if (!isRhythmLevel()) {
     const sustaining = keysPressed.has("Space") || keysPressed.has("ArrowUp");
     if (sustaining) {
@@ -2872,11 +3290,222 @@ function gameLoop(timestamp) {
 
   requestAnimationFrame(gameLoop);
 }
+
+/************************************************************
+ * ESCORT LOOP HELPERS
+ ************************************************************/
+function updateEscortLevel(delta, now) {
+  const levelConfig = levels[currentLevel];
+  if (!escortState.active || !levelConfig || levelEnding) return;
+
+  const cfg = getEscortConfig(levelConfig);
+  if (escortState.elapsed === 0 || escortState.hazardTimer === undefined) {
+    escortState.hazardTimer = 0;
+    escortState.shieldDecayTimer = 0;
+    escortState.moteTimer = 0;
+  }
+
+  escortState.elapsed += delta;
+  const progress = Math.min(escortState.elapsed / cfg.durationMs, 1);
+  escortState.spriteProgress = progress;
+  updateEscortSpritePosition(progress);
+
+  // Hazard rhythm
+  escortState.hazardTimer += delta;
+  if (escortState.hazardTimer >= cfg.hazardBurstInterval) {
+    escortState.hazardTimer -= cfg.hazardBurstInterval;
+    spawnMoonRockHazard(cfg);
+  } else if (Math.random() < delta / (cfg.hazardBurstInterval * 2.2)) {
+    spawnMoonRockHazard(cfg);
+  }
+
+  // Shield decay
+  escortState.shieldDecayTimer = (escortState.shieldDecayTimer ?? 0) + delta;
+  if (
+    escortState.shields > 0 &&
+    escortState.shieldDecayTimer >= cfg.shieldDecayMs
+  ) {
+    escortState.shieldDecayTimer -= cfg.shieldDecayMs;
+    escortState.shields = Math.max(0, escortState.shields - 1);
+    updateScoreboardForLevel(levelConfig);
+  }
+
+  updateEscortHazards(delta, cfg);
+  updateEscortLifeMeter(cfg);
+
+  if (escortState.strikes >= cfg.maxStrikes && !escortState.failTriggered) {
+    triggerEscortFail("Nimbus overwhelmed!");
+    return;
+  }
+
+  if (progress >= 1) {
+    handleEscortFinale(delta, cfg);
+  } else {
+    escortState.finaleHold.active = false;
+    escortState.finaleHold.heldMs = 0;
+  }
+}
+
+function updateEscortSpritePosition(progress) {
+  const startX = canvas.width * 0.18;
+  const endX = canvas.width * 0.78;
+  const eased =
+    progress < 0.5
+      ? 2 * progress * progress
+      : -1 + (4 - 2 * progress) * progress;
+  escortState.spritePos.x = lerp(startX, endX, eased);
+  const wave = Math.sin(progress * Math.PI * 2) * canvas.height * 0.06;
+  escortState.spritePos.y = canvas.height * 0.4 + wave;
+}
+
+function spawnMoonRockHazard(cfg) {
+  const baseSpeed = (cfg.moonRockSpeed || 520) / 1000;
+  escortState.hazards.push({
+    x: canvas.width + 80,
+    y: canvas.height * 0.3 + Math.random() * canvas.height * 0.4,
+    vx: -baseSpeed * (0.75 + Math.random() * 0.4),
+    vy: (Math.random() - 0.5) * 0.08,
+    radius: 18 + Math.random() * 18,
+    spin: Math.random() * Math.PI * 2,
+    spinSpeed: (Math.random() - 0.5) * 0.006,
+    active: true
+  });
+}
+
+function updateEscortHazards(delta, cfg) {
+  const sprite = escortState.spritePos;
+  escortState.hazards.forEach(h => {
+    if (!h.active) return;
+    h.x += h.vx * delta;
+    h.y += h.vy * delta;
+    h.spin += (h.spinSpeed || 0) * delta;
+
+    if (h.y < 80 || h.y > canvas.height - 80) {
+      h.vy *= -1;
+    }
+
+    const spriteHit =
+      Math.hypot(h.x - sprite.x, h.y - sprite.y) <
+      h.radius + 42;
+    if (spriteHit) {
+      h.active = false;
+      handleMoonRockStrike(cfg, h.x, h.y);
+      return;
+    }
+
+    const dragonHit =
+      Math.hypot(h.x - dragon.x, h.y - dragon.y) <
+      h.radius + dragon.radius * 0.65;
+    if (dragonHit) {
+      h.active = false;
+      popTexts.push({
+        x: h.x,
+        y: h.y,
+        text: "Blocked!",
+        color: "#7bed9f",
+        life: 1
+      });
+    }
+  });
+
+  escortState.hazards = escortState.hazards.filter(
+    h => h.active && h.x > -120
+  );
+}
+
+function handleMoonRockStrike(cfg, x = canvas.width / 2, y = canvas.height / 2) {
+  const levelConfig = levels[currentLevel];
+  if (escortState.shields > 0) {
+    escortState.shields = Math.max(0, escortState.shields - 1);
+    popTexts.push({
+      x,
+      y,
+      text: "Shielded!",
+      color: "#66d9ff",
+      life: 1.1
+    });
+    updateScoreboardForLevel(levelConfig);
+  } else {
+    escortState.strikes += 1;
+    popTexts.push({
+      x,
+      y,
+      text: "Strike!",
+      color: "#ff7675",
+      life: 1
+    });
+    updateEscortLifeMeter(cfg);
+  }
+}
+
+function updateEscortLifeMeter(cfg) {
+  if (!isEscortLevel()) {
+    lifeMeter.style.display = "none";
+    return;
+  }
+
+  lifeMeter.style.display = "block";
+  let html = "";
+  for (let i = 0; i < cfg.maxStrikes; i++) {
+    const lost = i < escortState.strikes;
+    html += `<span class="${lost ? "lost" : ""}">${lost ? "🤍" : "❤️"}</span>`;
+  }
+  lifeMeter.innerHTML = html;
+}
+
+function handleEscortFinale(delta, cfg) {
+  escortState.finaleHold.active = true;
+  const holding =
+    keysPressed.has("Space") ||
+    keysPressed.has("ArrowUp") ||
+    keysPressed.has("KeyW") ||
+    keysPressed.has("Enter");
+  const change = holding ? delta : -delta * 0.65;
+  escortState.finaleHold.heldMs = Math.max(
+    0,
+    Math.min(cfg.finaleHoldMs, escortState.finaleHold.heldMs + change)
+  );
+
+  if (
+    holding &&
+    escortState.finaleHold.heldMs >= cfg.finaleHoldMs &&
+    !levelEnding
+  ) {
+    escortState.active = false;
+    lifeMeter.style.display = "none";
+    levelComplete();
+  }
+}
+
+function triggerEscortFail(message = "Nimbus lost!") {
+  if (escortState.failTriggered) return;
+  escortState.failTriggered = true;
+  levelEnding = true;
+
+  popTexts.push({
+    x: canvas.width / 2,
+    y: canvas.height * 0.4,
+    text: message,
+    color: "#ffe066",
+    life: 1.5
+  });
+
+  setTimeout(() => {
+    lifeMeter.style.display = "none";
+    levelEnding = false;
+    loadLevel(currentLevel);
+  }, 1400);
+}
 /************************************************************
  * INPUT HANDLERS
  ************************************************************/
 function handlePointer(evt) {
   ensureAudioContext();
+
+  if (isEscortLevel()) {
+    handleEscortTap();
+    return;
+  }
 
   if (isRhythmLevel()) {
     if (rhythmState.mode === "dualLane") {
@@ -2944,6 +3573,17 @@ document.addEventListener("keydown", e => {
 
   keysPressed.add(e.code);
 
+  if (isEscortLevel()) {
+    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "Enter") {
+      handleEscortTap();
+    } else if (e.code === "ArrowLeft" || e.code === "KeyA") {
+      dragon.vx -= 1.25;
+    } else if (e.code === "ArrowRight" || e.code === "KeyD") {
+      dragon.vx += 1.25;
+    }
+    return;
+  }
+
   if (e.code === "Space" || e.code === "ArrowUp") {
     flapDragon();
   } else if (e.code === "ArrowLeft") {
@@ -2978,9 +3618,28 @@ btnRight.ontouchstart = () => keysPressed.add("ArrowRight");
 btnRight.ontouchend   = () => keysPressed.delete("ArrowRight");
 btnFlap.ontouchstart  = () => {
   if (isRhythmLevel()) return handleRhythmInput();
+  if (isEscortLevel()) return handleEscortTap();
   flapDragon();
 };
 
+function handleEscortTap() {
+  if (!isEscortLevel() || levelEnding) return;
+  ensureAudioContext();
+
+  escortState.lastTapTime = performance.now();
+
+  // Restore full lift so the dragon climbs like a normal flap
+  rhythmTapBoost(0.55);
+  flapDragon();
+
+  popTexts.push({
+    x: escortState.spritePos.x,
+    y: escortState.spritePos.y - 60,
+    text: "Stay close!",
+    color: "#f8f0ff",
+    life: 0.7
+  });
+}
 /************************************************************
  * LEVEL SKIP
  ************************************************************/
@@ -3033,6 +3692,7 @@ requestAnimationFrame(gameLoop); // Begin continuous update & draw
 </script>
 </body>
 </html>
+
 
 
 
