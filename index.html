@@ -87,7 +87,7 @@
     #winOverlay {
       display: none;
       position: absolute;
-      top: 40%;
+      top: 25%;
       left: 50%;
       transform: translate(-50%, -50%);
       font-size: 48px;
@@ -287,6 +287,7 @@ const lifeMeter = document.getElementById("lifeMeter");
 const winOverlay = document.getElementById("winOverlay");
 const overlay = document.getElementById("overlay");
 const skipBtn = document.getElementById("skipBtn");
+
 
 // Enable keyboard focus for canvas
 canvas.setAttribute("tabindex", "-1");
@@ -535,9 +536,11 @@ const handcraftedLevels = new Map([
   [
     8,
     {
-      name: "Bubble Song",
-      mechanic: "scoreGoal",
-      winScore: 1100,
+      name: "Alphabet Jam",
+      mechanic: "alphabetLoop",
+      alphabetSequence: ["A", "B", "C", "D"],
+      letterGoal: 4,
+      allowOutOfOrder: false,
       bgGradient: ["#56ab2f", "#a8e063"],
       control: "flap"
     }
@@ -545,15 +548,255 @@ const handcraftedLevels = new Map([
   [
     9,
     {
-      name: "Sky Celebration",
-      mechanic: "scoreCollect",
-      collectGoal: 6,
-      winScore: 1200,
+      name: "Number Glow",
+      mechanic: "numberLoop",
+      numberSequence: [1, 2, 3, 4],
+      numberTimerMs: 28000,
+      allowOutOfOrderNumbers: false,
+      bubbleRadius: 48,
+      bubblePalette: ["#ffbf69", "#ffd3b6", "#c7f9cc", "#a0c4ff"],
       bgGradient: ["#ff9a9e", "#fad0c4"],
       control: "flap"
     }
-  ]
-]);
+  ],
+  [
+    10,
+    {
+      name: "Math Bubble Buddies",
+      mechanic: "rescueGoal",
+      rescueGoal: 2,
+      bgGradient: ["#f6d365", "#fda085"],
+      control: "arrow",
+      mathBubble: true,
+      useStars: false,
+      mathEquation: "1 + 1 = 2"
+    }
+  ],
+  [
+    11,
+    {
+      name: "Coral Soar",
+      mechanic: "scoreGoal",
+      winScore: 1280,
+      bgGradient: ["#FF61D2", "#FE9090"],
+      control: "flap"
+    }
+  ],
+  [
+    13,
+    {
+      name: "Crystal Surge",
+      mechanic: "scoreCollect",
+      collectGoal: 9,
+      winScore: 1500,
+      bgGradient: ["#7F7FD5", "#86A8E7"],
+      control: "flap"
+    }
+  ], // ✅ Missing comma fixed here!
+  [
+    20,
+    {
+      name: "Math Bubble Trio",
+      mechanic: "rescueGoal",
+      rescueGoal: 3,
+      bgGradient: ["#fbc2eb", "#a6c1ee"],
+      control: "arrow",
+      mathBubble: true,
+      useStars: false,
+      mathEquation: "1 + 1 + 1 = 3"
+    }
+  ] // ✅ No comma after final entry
+]); // ✅ Properly closes the Map
+/************************************************************
+ * ALPHABET LOOP HELPERS
+ ************************************************************/
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const LETTERS_PER_ALPHABET_LEVEL = 4;
+
+function getAlphabetSequenceForLevel(levelNumber) {
+  const chunkIndex = Math.floor(levelNumber / 10);
+  const alphabetSequence = [];
+  for (let i = 0; i < LETTERS_PER_ALPHABET_LEVEL; i++) {
+    const letterIndex = chunkIndex * LETTERS_PER_ALPHABET_LEVEL + i;
+    alphabetSequence.push(ALPHABET[letterIndex % ALPHABET.length]);
+  }
+  return alphabetSequence;
+}
+
+function syncHandcraftedAlphabetLoops() {
+  const alphabetLoopEntries = Array.from(handcraftedLevels.entries())
+    .filter(([, config]) => config.mechanic === "alphabetLoop")
+    .sort((a, b) => a[0] - b[0]);
+
+  alphabetLoopEntries.forEach(([levelNumber, config]) => {
+    const alphabetSequence = getAlphabetSequenceForLevel(levelNumber);
+    config.alphabetSequence = alphabetSequence;
+    config.letterGoal = alphabetSequence.length;
+  });
+}
+/************************************************************
+ * ALPHABET STATE RESET
+ ************************************************************/
+function resetAlphabetState(level) {
+  // Turn off the alphabet game mode by default
+  alphabetState.active = false;
+  alphabetState.targetLetters = [];
+  alphabetState.collected = [];
+  alphabetState.allowOutOfOrder = false;
+  alphabetState.timerMs = 0;
+  alphabetState.timerStart = 0;
+  alphabetState.failTriggered = false;
+  alphabetState.letters = [];
+
+  if (!level || level.mechanic !== "alphabetLoop") return;
+
+  // Initialize alphabet mode
+  alphabetState.active = true;
+  alphabetState.targetLetters = Array.isArray(level.alphabetSequence)
+    ? level.alphabetSequence.slice()
+    : getAlphabetSequenceForLevel(level.levelNumber ?? 1);
+  alphabetState.collected = [];
+  alphabetState.allowOutOfOrder = !!level.allowOutOfOrder;
+  alphabetState.timerMs = level.timerMs || 30000;
+  alphabetState.timerStart = performance.now();
+  alphabetState.failTriggered = false;
+  alphabetState.letters = [];
+
+  const colors =
+    Array.isArray(alphabetBubblePalette) && alphabetBubblePalette.length
+      ? alphabetBubblePalette
+      : ["#f97316", "#fbbf24", "#34d399", "#38bdf8", "#a855f7"];
+
+  const count = alphabetState.targetLetters.length;
+  for (let i = 0; i < count; i++) {
+    alphabetState.letters.push({
+      letter: alphabetState.targetLetters[i],
+      x: 160 + Math.random() * (canvas.width - 320),
+      y: 160 + Math.random() * (canvas.height - 280),
+      radius: 36,
+      active: true,
+      color: colors[i % colors.length]
+    });
+  }
+}
+/************************************************************
+ * NUMBER LOOP HELPERS
+ ************************************************************/
+const NUMBERS_PER_NUMBER_LEVEL = 4;
+const NUMBER_SEQUENCE_START = 1;
+
+function getNumberSequenceForLevel(levelNumber) {
+  const chunkIndex = Math.floor(levelNumber / 10);
+  const start = NUMBER_SEQUENCE_START + chunkIndex * NUMBERS_PER_NUMBER_LEVEL;
+  const numberSequence = [];
+  for (let i = 0; i < NUMBERS_PER_NUMBER_LEVEL; i++) {
+    numberSequence.push(start + i);
+  }
+  return numberSequence;
+}
+
+function syncHandcraftedNumberLoops() {
+  const numberLoopEntries = Array.from(handcraftedLevels.entries())
+    .filter(([, config]) => config.mechanic === "numberLoop")
+    .sort((a, b) => a[0] - b[0]);
+
+  numberLoopEntries.forEach(([levelNumber, config]) => {
+    const numberSequence = getNumberSequenceForLevel(levelNumber);
+    config.numberSequence = numberSequence;
+    config.numberSequenceLength = numberSequence.length;
+  });
+}
+
+/************************************************************
+ * NUMBER STATE RESET
+ ************************************************************/
+function resetNumberState(level) {
+  numberState.active = false;
+  numberState.allowOutOfOrder = false;
+  numberState.sequence = [];
+  numberState.nodes = [];
+  numberState.collected = [];
+  numberState.currentIndex = 0;
+  numberState.timerMs = 0;
+  numberState.timerStart = 0;
+  numberState.failTriggered = false;
+
+  if (!level || level.mechanic !== "numberLoop") return;
+
+  numberState.active = true;
+  numberState.allowOutOfOrder = !!level.allowOutOfOrderNumbers;
+  numberState.sequence = Array.isArray(level.numberSequence)
+    ? level.numberSequence.slice()
+    : getNumberSequenceForLevel(level.levelNumber ?? 1);
+  numberState.nodes = [];
+  numberState.collected = [];
+  numberState.currentIndex = 0;
+  numberState.timerMs = level.numberTimerMs || 30000;
+  numberState.timerStart = performance.now();
+  numberState.failTriggered = false;
+
+  const colors = Array.isArray(numberBubblePalette) && numberBubblePalette.length
+    ? numberBubblePalette
+    : ["#fde68a", "#fbcfe8", "#bae6fd", "#c7d2fe", "#fecdd3", "#bbf7d0"];
+
+  const count = numberState.sequence.length;
+  for (let i = 0; i < count; i++) {
+    numberState.nodes.push({
+      value: numberState.sequence[i],
+      x: 160 + Math.random() * (canvas.width - 320),
+      y: 160 + Math.random() * (canvas.height - 280),
+      radius: numberState.bubbleRadius ?? 44,
+      active: true,
+      color: colors[i % colors.length],
+      pulseOffset: Math.random() * 6.28
+    });
+  }
+}
+
+
+const alphabetState = {
+  active: false,
+  targetLetters: [],
+  collected: [],
+  allowOutOfOrder: false,
+  timerMs: 0,
+  timerStart: 0,
+  failTriggered: false
+};
+
+const numberState = {
+  active: false,
+  allowOutOfOrder: false,
+  sequence: [],
+  nodes: [],
+  collected: [],
+  timerMs: 0,
+  timerStart: 0,
+  failTriggered: false,
+  currentIndex: 0,
+  bubbleRadius: 44
+};
+/************************************************************
+ * EQUATION DISPLAY STATE (for Level 10)
+ ************************************************************/
+const equationState = {
+  active: false,
+  partsShown: 0,
+  text: "",
+  shownAt: 0
+};
+const mathBubbleLevels = new Set([10, 20]);
+let currentMathEquation = "";
+let mathBubbleStage = 0;
+let mathBubbleRevealTimeout = null;
+let mathBubbleTokens = [];
+let mathBubbleStageBreakpoints = [];
+let currentLevel = null;
+let currentLevelIndex = 0;
+if (currentLevel === null) currentLevel = 0; // 🌍 ensure starting level is 0
+let flightStarted = false;
+let levelEnding = false;
+let score = 0;
 
 const bgPalette = [
   ["#87ceeb", "#dff9fb"],
@@ -572,6 +815,24 @@ const bgPalette = [
   ["#43cea2", "#185a9d"],
   ["#c33764", "#1d2671"],
   ["#ff9966", "#ff5e62"]
+];
+
+const alphabetBubblePalette = [
+  "#f97316",
+  "#fbbf24",
+  "#34d399",
+  "#38bdf8",
+  "#a855f7",
+  "#ec4899"
+];
+
+const numberBubblePalette = [
+  "#fde68a",
+  "#fbcfe8",
+  "#bae6fd",
+  "#c7d2fe",
+  "#fecdd3",
+  "#bbf7d0"
 ];
 
 const nameFragments = {
@@ -679,10 +940,36 @@ const levelArchetypes = {
     bgGradient,
     control: "rhythm",
     escort: generateEscortConfig(levelNumber)
+  }),
+  alphabetLoop: ({ levelNumber, name, bgGradient }) => {
+    const alphabetSequence = getAlphabetSequenceForLevel(levelNumber);
+    return {
+      name,
+      mechanic: "alphabetLoop",
+      alphabetSequence,
+      alphabetSequenceLength: alphabetSequence.length,
+      letterGoal: alphabetSequence.length,
+      allowOutOfOrder: levelNumber >= 30,
+      timerMs: 45000 - Math.min(15000, levelNumber * 400),
+      bgGradient,
+      control: "flap"
+    };
+  },
+  numberLoop: ({ levelNumber, name, bgGradient }) => ({
+    name,
+    mechanic: "numberLoop",
+    numberSequenceLength: 3 + Math.floor(levelNumber / 8),
+    numberTimerMs: 30000 - Math.min(12000, levelNumber * 220),
+    allowOutOfOrderNumbers: levelNumber >= 45,
+    bubbleRadius: 44,
+    bgGradient,
+    control: "flap"
   })
 };
 
 function pickMechanic(levelNumber) {
+  if (levelNumber % 10 === 8) return "alphabetLoop";
+  if (levelNumber % 10 === 9) return "numberLoop";
   if (levelNumber % 10 === 0) return "rescueGoal";
   if (levelNumber % 10 === 5) return "escortPulse";
   if (levelNumber % 5 === 0) return "rhythmBounce";
@@ -728,14 +1015,19 @@ function generateRhythmConfig(levelNumber) {
 function generateEscortConfig(levelNumber) {
   const durationMs = 22000 + Math.min(4000, levelNumber * 120);
   const hazardBurstInterval = Math.max(1100, 2000 - levelNumber * 45);
+
+  const isLevel15 = levelNumber === 15;
+  const speedModifier = isLevel15 ? 0.5 : 1;
+  const burstModifier = isLevel15 ? 1.5 : 1;
+
   return {
     durationMs,
     maxStrikes: 5 + Math.floor(levelNumber / 25),
     targetShields: 7 + Math.floor(levelNumber / 4),
     shieldDecayMs: 3600,
     finaleHoldMs: 2800,
-    moonRockSpeed: 480 + levelNumber * 8,
-    hazardBurstInterval,
+    moonRockSpeed: (480 + levelNumber * 8) * speedModifier,
+    hazardBurstInterval: hazardBurstInterval * burstModifier,
     goalName: "Sky Gate",
     stormName: "Lunar Gale"
   };
@@ -770,70 +1062,9 @@ function buildLevels(totalLevels = 100) {
   }
   return generated;
 }
-
 const levels = buildLevels();
-
-const objectTypes = {
-  balloon: { id: "balloon", color: "#3498db", shape: "circle", score: 30 },
-  gem: { id: "gem", color: "#f1c40f", shape: "diamond", score: 70 },
-  star: { id: "star", color: "#f39c12", shape: "star", score: 50 },
-  heart: { id: "heart", color: "#e74c3c", shape: "heart", score: 100 },
-  spiky: { id: "spiky", color: "#7f8c8d", shape: "star", score: -30 },
-  coin: { id: "coin", color: "#fcd34d", shape: "coin", score: 0, coinValue: 1 }
-};
-let currentLevel = 0,
-  score = 0,
-  collected = 0,
-  elapsed = 0;
-let coinBank = 0;
-let babyDragons = [];
-let rescuedCount = 0;
-let rescueSlotQueue = [];
-let gameOver = false,
-  objects = [];
-let flightStarted = false;
-let levelEnding = false;
-
-const escortState = {
-  active: false,
-  elapsed: 0,
-  spriteProgress: 0,
-  spritePos: { x: 0, y: 0 },
-  shields: 0,
-  strikes: 0,
-  finaleHold: { active: false, heldMs: 0 },
-  hazards: [],
-  motes: [],
-  failTriggered: false,
-  announcement: null
-};
-
-function resetEscortState(levelConfig = levels[currentLevel]) {
-  const isEscort = levelConfig?.mechanic === "escortPulse";
-  escortState.active = isEscort;
-  escortState.elapsed = 0;
-  escortState.spriteProgress = 0;
-  escortState.spritePos.x = 0;
-  escortState.spritePos.y = 0;
-  escortState.shields = 0;
-  escortState.strikes = 0;
-  escortState.finaleHold.active = false;
-  escortState.finaleHold.heldMs = 0;
-  escortState.hazards.length = 0;
-  escortState.motes.length = 0;
-  escortState.failTriggered = false;
-  escortState.announcement = null;
-}
-
-function isEscortLevel(levelConfig = levels[currentLevel]) {
-  return levelConfig?.mechanic === "escortPulse";
-}
-
-function getEscortConfig(levelConfig = levels[currentLevel]) {
-  if (levelConfig?.escort) return levelConfig.escort;
-  const derivedLevelNumber = levelConfig?.levelNumber ?? currentLevel + 1;
-  return generateEscortConfig(derivedLevelNumber);
-}
+syncHandcraftedAlphabetLoops();
+syncHandcraftedNumberLoops();
 
 /************************************************************
  * RHYTHM STATE
@@ -867,12 +1098,25 @@ const rhythmState={
   misses:0,
   failPending:false
 };
-function isRescueLevel(){
-  return levels[currentLevel]?.mechanic==="rescueGoal";
+function isRescueLevel() {
+  return levels[currentLevel]?.mechanic === "rescueGoal";
 }
-function isRhythmLevel(){
-  return levels[currentLevel]?.mechanic==="rhythmBounce";
+function isRhythmLevel() {
+  return levels[currentLevel]?.mechanic === "rhythmBounce";
 }
+function isAlphabetLevel(level = levels[currentLevel]) {
+  return level?.mechanic === "alphabetLoop";
+}
+function isNumberLevel(level = levels[currentLevel]) {
+  return level?.mechanic === "numberLoop";
+}
+
+function isMathBubbleLevel(level = levels[currentLevel]) {
+  if (!level) return false;
+  const levelNumber = level.levelNumber ?? currentLevel + 1;
+  return mathBubbleLevels.has(levelNumber);
+}
+
 function resetRhythmState(level){
   if(level.mechanic!=="rhythmBounce"){
     rhythmState.active=false;
@@ -1275,11 +1519,51 @@ function formatMoney(value) {
 }
 
 function updateCoinScoreboard(level) {
-  scoreText.textContent = `Bank ${formatMoney(coinBank)}/${formatMoney(level.coinTarget)}`;
+  const target = level?.coinTarget ?? 0;
+  scoreText.textContent = `Bank ${formatMoney(coinBank)}/${formatMoney(target)}`;
 }
 
 function updateRescueScoreboard(level) {
-  scoreText.textContent = `Rescued ${rescuedCount}/${level.rescueGoal}`;
+  const L = level || levels[currentLevel];
+  if (!L) return;
+
+  if (isMathBubbleLevel(L)) {
+    const goal = typeof L.rescueGoal === "number" ? L.rescueGoal : 0;
+    const equation = currentMathEquation || L.mathEquation || "1 + 1 = 2";
+    scoreText.textContent = `🧮 ${equation} — ${rescuedCount}/${goal}`;
+  } else {
+    const goal = typeof L.rescueGoal === "number" ? L.rescueGoal : 0;
+    scoreText.textContent = `Rescued ${rescuedCount}/${goal}`;
+  }
+}
+
+function updateScoreboardForLevel(level) {
+  if (!level) return;
+
+  switch (level.mechanic) {
+    case "coinGoal":
+      updateCoinScoreboard(level);
+      break;
+    case "rescueGoal":
+      updateRescueScoreboard(level);
+      break;
+    case "collectGoal":
+    case "scoreCollect":
+      scoreText.textContent = `Collected ${collected}/${level.collectGoal || 0}`;
+      break;
+    case "alphabetLoop":
+      scoreText.textContent = `Letters ${alphabetState.collected.length}/${alphabetState.targetLetters.length}`;
+      break;
+    case "numberLoop":
+      scoreText.textContent = `Numbers ${numberState.collected.length}/${numberState.sequence.length}`;
+      break;
+    case "rhythmBounce":
+      updateRhythmScoreboard();
+      break;
+    default:
+      scoreText.textContent = `Score ${score}/${level.winScore || 0}`;
+      break;
+  }
 }
 
 /************************************************************
@@ -1303,6 +1587,10 @@ const dragon = {
   wingTimer: 0,
   color: "#e74c3c"
 };
+/************************************************************
+ * OBJECT POOL
+ ************************************************************/
+const objects = [];
 
 const particles = [];
 const fireParticles = [];
@@ -1825,31 +2113,105 @@ function drawBabyFireBursts(){
     if(f.life<=0)babyFireBursts.splice(i,1);
   }
 }
-function drawRescuePodFront(){
+function drawRescuePodFront() {
+  const level = levels[currentLevel];
+
   ctx.save();
-  ctx.translate(rescuePod.x,rescuePod.y);
-  const r=rescuePod.radius;
-  const glow=0.35+Math.sin(rescuePod.glowPhase)*0.1;
-  const glass=ctx.createRadialGradient(-r*0.2,-r*0.35,r*0.2,0,0,r);
-  glass.addColorStop(0,`rgba(255,255,255,${0.7+glow*0.3})`);
-  glass.addColorStop(0.55,"rgba(200,230,255,0.25)");
-  glass.addColorStop(1,"rgba(255,255,255,0.08)");
-  ctx.fillStyle=glass;
+  ctx.translate(rescuePod.x, rescuePod.y);
+  const r = rescuePod.radius;
+  const glow = 0.35 + Math.sin(rescuePod.glowPhase) * 0.1;
+  const glass = ctx.createRadialGradient(-r * 0.2, -r * 0.35, r * 0.2, 0, 0, r);
+  glass.addColorStop(0, `rgba(255,255,255,${0.7 + glow * 0.3})`);
+  glass.addColorStop(0.55, "rgba(200,230,255,0.25)");
+  glass.addColorStop(1, "rgba(255,255,255,0.08)");
+  ctx.fillStyle = glass;
   ctx.beginPath();
-  ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.lineWidth=6;
-  ctx.strokeStyle=`rgba(255,255,255,${0.4+glow*0.2})`;
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = `rgba(255,255,255,${0.4 + glow * 0.2})`;
   ctx.beginPath();
-  ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.strokeStyle="rgba(255,255,255,0.35)";
-  ctx.lineWidth=4;
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(-r*0.2,-r*0.25,r*0.6,Math.PI*1.1,Math.PI*1.7);
+  ctx.arc(-r * 0.2, -r * 0.25, r * 0.6, Math.PI * 1.1, Math.PI * 1.7);
   ctx.stroke();
+  ctx.restore();
+
+  if (level && isMathBubbleLevel(level)) {
+    drawMathBubbleEquation(level);
+  }
+}
+function drawMathBubbleEquation(level) {
+  if (!level || !isMathBubbleLevel(level)) return;
+
+  const stageCount =
+    typeof level.mathBubbleStage === "number"
+      ? level.mathBubbleStage
+      : mathBubbleStage;
+
+  const fullEquation = level.mathEquation || currentMathEquation || "1 + 1 = 2";
+  const tokens = mathBubbleTokens.length
+    ? mathBubbleTokens
+    : fullEquation.split(/\s+/).filter(Boolean);
+
+  const clampedStage = Math.max(0, Math.min(stageCount, tokens.length));
+  if (clampedStage === 0) return;
+
+  const text =
+    clampedStage >= tokens.length
+      ? tokens.join(" ")
+      : tokens.slice(0, clampedStage).join(" ");
+
+  const fontSize = Math.max(24, rescuePod.radius * 0.32);
+  const paddingX = 20;
+  const paddingY = 12;
+
+  ctx.save();
+
+  if (typeof ctx.resetTransform === "function") {
+    ctx.resetTransform();
+  } else {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  ctx.font = `bold ${fontSize}px "Comic Sans MS", "Comic Neue", cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const metrics = ctx.measureText(text);
+  const textHeight =
+    (metrics.actualBoundingBoxAscent || fontSize * 0.7) +
+    (metrics.actualBoundingBoxDescent || fontSize * 0.3);
+  const boxWidth = metrics.width + paddingX * 2;
+  const boxHeight = textHeight + paddingY * 2;
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const boxX = centerX - boxWidth / 2;
+  const boxY = centerY - boxHeight / 2;
+
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 2;
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 16);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+  }
+
+  ctx.fillStyle = "#2c3e50";
+  ctx.fillText(text, centerX, centerY);
+
   ctx.restore();
 }
 function spawnBabyFire(x, y) {
@@ -2150,7 +2512,62 @@ function drawFluffyCloud(cloud){
  ************************************************************/
 const popTexts = [];
 
+/* --- suppress pop-text overlays on specific levels --- */
+const suppressedPopLevels = new Set([9]); // Add 10 later (e.g., new Set([9, 10]))
+function shouldSuppressPopText(levelIndex = currentLevel) {
+  const levelNumber = levels[levelIndex]?.levelNumber ?? levelIndex + 1;
+  return suppressedPopLevels.has(levelNumber);
+}
+const originalPopTextsPush = popTexts.push.bind(popTexts);
+popTexts.push = function (...items) {
+  if (shouldSuppressPopText()) {
+    return popTexts.length;
+  }
+  return originalPopTextsPush(...items);
+};
+/************************************************************
+ * OBJECT TYPES
+ ************************************************************/
+const objectTypes = {
+  balloon: {
+    id: "balloon",
+    shape: "circle",
+    color: "#ff7675",
+    score: +20
+  },
+  star: {
+    id: "star",
+    shape: "star",
+    color: "#ffe066",
+    score: +25
+  },
+  gem: {
+    id: "gem",
+    shape: "diamond",
+    color: "#74b9ff",
+    score: +30
+  },
+  heart: {
+    id: "heart",
+    shape: "heart",
+    color: "#ff6b81",
+    score: -25
+  },
+  coin: {
+    id: "coin",
+    shape: "coin",
+    color: "#f1c40f",
+    score: +10,
+    coinValue: 1
+  }
+};
 function chooseObjectType(level) {
+  // 🛡️ Guard against undefined level objects
+  if (!level || typeof level !== "object" || !("mechanic" in level)) {
+    console.warn("chooseObjectType() called with invalid or missing level; using balloon fallback.");
+    return objectTypes.balloon;
+  }
+
   if (level.mechanic === "coinGoal" && Math.random() < 0.7) {
     return objectTypes.coin;
   }
@@ -2328,6 +2745,93 @@ function drawObjects() {
   });
 }
 
+function renderAlphabetLetters(context) {
+  if (!alphabetState.active) return;
+
+  for (const node of alphabetState.letters) {
+    if (!node) continue;
+
+    context.save();
+    context.translate(node.x, node.y);
+
+    const radius = node.radius ?? 36;
+    const baseColor = node.color ?? "#f97316";
+    const gradient = context.createRadialGradient(0, 0, radius * 0.2, 0, 0, radius);
+
+    if (node.active) {
+      gradient.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+      gradient.addColorStop(1, baseColor);
+    } else {
+      gradient.addColorStop(0, "rgba(200, 200, 200, 0.6)");
+      gradient.addColorStop(1, "rgba(130, 130, 130, 0.45)");
+    }
+
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(0, 0, radius, 0, Math.PI * 2);
+    context.fill();
+
+    context.strokeStyle = node.active
+      ? "rgba(255, 255, 255, 0.95)"
+      : "rgba(210, 210, 210, 0.35)";
+    context.lineWidth = 3;
+    context.stroke();
+
+    context.fillStyle = node.active ? "#1f2933" : "#4b5563";
+    context.font = `${Math.floor(radius * 0.9)}px 'Fredoka One', sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(node.letter ?? "", 0, 3);
+
+    context.restore();
+  }
+}
+function renderNumberNodes(context) {
+  if (!numberState.active) return;
+
+  const now = performance.now();
+
+  for (const node of numberState.nodes) {
+    if (!node) continue;
+
+    context.save();
+    context.translate(node.x, node.y);
+
+    const radius = node.radius ?? numberState.bubbleRadius ?? 44;
+    const pulse = 1 + Math.sin((now / 300) + (node.pulseOffset || 0)) * 0.04;
+    const actualRadius = radius * pulse;
+
+    const baseColor = node.color ?? "#fde68a";
+    const gradient = context.createRadialGradient(0, 0, actualRadius * 0.2, 0, 0, actualRadius);
+    if (node.active) {
+      gradient.addColorStop(0, "rgba(255,255,255,0.95)");
+      gradient.addColorStop(1, baseColor);
+    } else {
+      gradient.addColorStop(0, "rgba(200,200,200,0.6)");
+      gradient.addColorStop(1, "rgba(130,130,130,0.45)");
+    }
+
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(0, 0, actualRadius, 0, Math.PI * 2);
+    context.fill();
+
+    context.strokeStyle = node.active
+      ? "rgba(255,255,255,0.95)"
+      : "rgba(210,210,210,0.35)";
+    context.lineWidth = 3;
+    context.stroke();
+
+    context.fillStyle = node.active ? "#1f2933" : "#4b5563";
+    context.font = `${Math.floor(actualRadius * 0.85)}px 'Fredoka One', sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(node.value ?? "", 0, 4);
+
+    context.restore();
+  }
+}
+
 function drawPopTexts() {
   for (let i = popTexts.length - 1; i >= 0; i--) {
     const p = popTexts[i];
@@ -2345,7 +2849,7 @@ function drawPopTexts() {
     }
   }
 }
-  /************************************************************
+/************************************************************
  * LEVEL PROGRESSION
  ************************************************************/
 const campaignState = {
@@ -2379,23 +2883,28 @@ function levelComplete() {
   if (levelEnding) return;
   levelEnding = true;
 
+  // Clear any active timers
   if (window._levelTimer) {
     clearTimeout(window._levelTimer);
     window._levelTimer = null;
   }
 
+  // ✅ Success sound
   playTone(880, 0.15, "sine", 0.25);
 
-  const L = levels[currentLevel];
-  const nextIndex = currentLevel + 1;
+  // ✅ Ensure currentLevel is numeric
+  currentLevel = parseInt(currentLevel, 10) || 0;
+
+  // Level info and progression
+  const L = levels[currentLevel] || {};
   const isFinalLevel = currentLevel >= levels.length - 1;
 
+  // ✅ Overlay setup
   winOverlay.innerHTML = "";
   winOverlay.style.display = "block";
   winOverlay.style.cursor = "default";
 
   const title = document.createElement("div");
-  title.textContent = `Level ${currentLevel + 1} Complete!`;
   title.style.fontSize = "32px";
   title.style.fontWeight = "700";
   title.style.marginBottom = "10px";
@@ -2404,37 +2913,95 @@ function levelComplete() {
   const info = document.createElement("div");
   info.style.fontSize = "24px";
   info.style.color = "#333";
-  info.textContent = isFinalLevel
-    ? "All levels complete!"
-    : `Get ready for Level ${nextIndex + 1}...`;
+
+  // ✅ Winner message
+  const nextLevelNumber = currentLevel + 2;
+  title.textContent = `🏆 Winner!  Now on to Level ${nextLevelNumber}`;
+  info.textContent = "";
 
   winOverlay.appendChild(title);
   winOverlay.appendChild(info);
 
+  // --- Campaign complete check ---
   if (isFinalLevel) {
     handleCampaignComplete();
     levelEnding = false;
     return;
   }
 
+  // ✅ Timer to hide overlay and move on
   window._levelTimer = setTimeout(() => {
+    // 🧩 DEBUG: confirm timer and currentLevel before advancing
+    console.log("⏰ Level timer firing, currentLevel =", currentLevel, "levels.length =", levels.length);
+
+    // Compute next index safely based on current global level
+    currentLevel = Number(currentLevel) || 0;
+    const nextIndex = currentLevel + 1;
+
+    console.log("⏰ Level timer firing, loading next index:", nextIndex);
+    console.log("➡️ About to call loadLevel, currentLevel:", currentLevel, "nextIndex:", nextIndex, "levels[nextIndex]:", !!levels[nextIndex]);
+
+    // Hide winner overlay and reset flags
     winOverlay.style.display = "none";
     levelEnding = false;
     window._levelTimer = null;
-    loadLevel(nextIndex);
+
+    // ✅ Advance the global index before loading
+    currentLevel = nextIndex;
+
+    // ✅ Safely load next level (restores Skip Intro compatibility)
+    if (typeof loadLevel === "function" && levels[nextIndex]) {
+      loadLevel(currentLevel);
+    } else if (window.loadLevel && levels[nextIndex]) {
+      window.loadLevel(currentLevel);
+    } else {
+      console.warn("⚠️ Unable to load next level:", nextIndex);
+    }
   }, 3000);
 }
 
 /************************************************************
+ * POP VISUALS + SOUND HELPERS (Fixes broken popping feedback)
+ ************************************************************/
+function playPopSound() {
+  // Reuse the global tone synthesizer to make cheerful pops
+  try {
+    playTone(880 + Math.random() * 220, 0.12, "square", 0.25);
+  } catch (e) {
+    console.warn("Pop sound failed:", e);
+  }
+}
+
+function spawnPopEffect(x, y) {
+  // Simple burst of small fire particles when a balloon pops
+  for (let i = 0; i < 15; i++) {
+    fireParticles.push({
+      x: x + (Math.random() - 0.5) * 18,
+      y: y + (Math.random() - 0.5) * 18,
+      vx: Math.random() * 3 - 1.5,
+      vy: Math.random() * 3 - 1.5,
+      radius: 2 + Math.random() * 3,
+      life: 1,
+      hue: 15 + Math.random() * 60
+    });
+  }
+}
+/************************************************************
  * HIT DETECTION
  ************************************************************/
 function detectHits() {
+  // ✅ make sure we pull the real level object, not just the index
   const L = levels[currentLevel];
+  console.log("DetectHits running,", L?.name, "Objects:", objects.length);
   if (!L) return;
+
+  // ✅ Rescue and rhythm levels use their own detectors
   if (L.mechanic === "rescueGoal" || L.mechanic === "rhythmBounce") {
     if (L.mechanic === "rescueGoal") detectRescueHits(L);
     return;
   }
+
+  // ✅ wait until flight actually starts
   if (L.control === "flap" && !flightStarted) return;
   if (levelEnding) return;
 
@@ -2442,8 +3009,11 @@ function detectHits() {
     const dx = dragon.x - obj.x;
     const dy = dragon.y - obj.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist >= dragon.radius + obj.radius) continue;
+    const hitRange = (dragon.radius + obj.radius) * 1.3;
 
+    if (dist >= hitRange) continue; // no collision
+
+    // --- COIN GOAL ---
     if (L.mechanic === "coinGoal" && obj.type.id === "coin") {
       const coinValue = obj.type.coinValue || L.coinValue || 1;
       coinBank += coinValue;
@@ -2454,38 +3024,47 @@ function detectHits() {
         color: "#f1c40f",
         life: 1
       });
+      playPopSound();
+      spawnPopEffect(obj.x, obj.y);
       respawnObject(obj);
       updateCoinScoreboard(L);
-      if (!levelEnding && coinBank >= L.coinTarget) {
-        levelComplete();
-      }
+      if (!levelEnding && coinBank >= L.coinTarget) levelComplete();
       continue;
     }
 
+    // --- SCORE GOAL (Balloon Bash etc.) ---
     if (L.mechanic === "scoreGoal") {
-      score += obj.type.score || 0;
+      const val = obj.type.score || 0;
+      score += val;
       if (score < 0) score = 0;
       scoreText.textContent = `Score ${score}/${L.winScore}`;
-      if (!levelEnding && score >= L.winScore) {
-        levelComplete();
-      }
+
       popTexts.push({
         x: obj.x,
         y: obj.y,
-        text: `${obj.type.score > 0 ? "+" : ""}${obj.type.score}`,
-        color: obj.type.score > 0 ? "#2ecc71" : "#e74c3c",
+        text: `${val > 0 ? "+" : ""}${val}`,
+        color: val > 0 ? "#2ecc71" : "#e74c3c",
         life: 1
       });
+
+      playPopSound();
+      spawnPopEffect(obj.x, obj.y);
       respawnObject(obj);
+
+      if (!levelEnding && score >= L.winScore) {
+        setTimeout(() => levelComplete(), 250);
+      }
       continue;
     }
 
+    // --- DEFAULT HANDLER (collect / combo / scoreCollect etc.) ---
     handleScoreHit(obj, L);
   }
 }
 
 function handleScoreHit(o, L) {
   const val = o.type.score;
+
   if (L.mechanic === "comboGoal") {
     const now = Date.now();
     if (now - lastPopTime < (L.comboTime || 2000)) {
@@ -2503,16 +3082,12 @@ function handleScoreHit(o, L) {
   if (L.mechanic === "collectGoal" || L.mechanic === "scoreCollect") {
     collected += 1;
     scoreText.textContent = `Collected ${collected}/${L.collectGoal}`;
-    if (!levelEnding && collected >= L.collectGoal) {
-      levelComplete();
-    }
+    if (!levelEnding && collected >= L.collectGoal) levelComplete();
   } else {
     score += addVal;
     if (score < 0) score = 0;
     scoreText.textContent = `Score ${score}/${L.winScore}`;
-    if (!levelEnding && score >= L.winScore) {
-      levelComplete();
-    }
+    if (!levelEnding && score >= L.winScore) levelComplete();
   }
 
   popTexts.push({
@@ -2526,29 +3101,34 @@ function handleScoreHit(o, L) {
     life: 1
   });
 
+  playPopSound();
+  spawnPopEffect(o.x, o.y);
   respawnObject(o);
 }
 
 function respawnObject(o) {
+  // ✅ use consistent level reference
   const levelConfig = levels[currentLevel];
   o.x = canvas.width + Math.random() * 900;
   o.y = 150 + Math.random() * 250;
+
   let nextType = chooseObjectType(levelConfig);
   const currentNegatives = objects.filter(obj => obj.type.score < 0).length;
-  if (nextType.score < 0 && currentNegatives >= 5) {
+  if (nextType.score < 0 && currentNegatives >= 5)
     nextType = objectTypes.balloon;
-  }
   o.type = nextType;
 }
 
 function detectRescueHits(levelConfig) {
   babyDragons.forEach(baby => {
     if (baby.state !== "waiting") return;
+
     const distance = Math.hypot(dragon.x - baby.x, dragon.y - baby.y);
     if (distance < dragon.radius * 0.75 + 24) {
       baby.state = "flying";
       baby.slotIndex = rescueSlotQueue.shift();
       spawnBabyFire(baby.x, baby.y);
+
       popTexts.push({
         x: baby.x,
         y: baby.y,
@@ -2556,15 +3136,44 @@ function detectRescueHits(levelConfig) {
         color: "#ffd166",
         life: 1
       });
+
+      playPopSound();
       rescuedCount += 1;
+
+      if (isMathBubbleLevel(levelConfig)) {
+        const breakpointIndex = Math.min(
+          rescuedCount - 1,
+          mathBubbleStageBreakpoints.length - 1
+        );
+
+        if (
+          breakpointIndex >= 0 &&
+          rescuedCount < levelConfig.rescueGoal
+        ) {
+          mathBubbleStage = mathBubbleStageBreakpoints[breakpointIndex];
+        }
+
+        if (rescuedCount >= levelConfig.rescueGoal) {
+          mathBubbleStage = mathBubbleTokens.length || 0;
+        }
+      }
+
       updateRescueScoreboard(levelConfig);
-      if (!levelEnding && rescuedCount >= levelConfig.rescueGoal) {
-        levelComplete();
+
+      const reachedGoal = rescuedCount >= levelConfig.rescueGoal;
+      if (!levelEnding && reachedGoal) {
+        if (isMathBubbleLevel(levelConfig)) {
+          if (mathBubbleRevealTimeout) clearTimeout(mathBubbleRevealTimeout);
+          mathBubbleRevealTimeout = setTimeout(() => {
+            if (!levelEnding) levelComplete();
+          }, 1000);
+        } else {
+          levelComplete();
+        }
       }
     }
   });
 }
-
 /************************************************************
  * BACKGROUND HELPERS
  ************************************************************/
@@ -2692,23 +3301,41 @@ function drawScene(now) {
   const L = levels[currentLevel] || {};
   const showToyStore = shouldShowToyStore(currentLevel);
 
+  // 🧩 DEBUG: see what the renderer thinks the current level and mechanic are
+  console.log(
+    "🎨 drawScene running — level", currentLevel,
+    "name:", L.name,
+    "mechanic:", L.mechanic,
+    "escortActive:", escortState.active
+  );
+
   drawWindLines();
   if (L.useStars) drawStars();
   if (showToyStore) drawToyFactory();
   if (currentLevel !== 4) drawClouds();
 
-  if (isEscortLevel()) {
+  if (isEscortLevel(L)) {
+    console.log("✅ isEscortLevel(L) detected — calling drawEscortScene()");
     drawEscortScene(now);
   } else if (isRescueLevel()) {
+    const level = levels[currentLevel];
     drawRescuePodBack();
     drawRescueSlotGuides();
     drawBabyDragons();
     drawRescuePodFront();
+    if (level && isMathBubbleLevel(level)) {
+      drawMathBubbleEquation(level);
+    }
   } else if (isRhythmLevel()) {
     drawRhythmClouds(now);
+  } else if (isAlphabetLevel()) {
+    // Alphabet bubbles are drawn later via renderAlphabetLetters()
   } else {
     drawObjects();
   }
+
+  renderAlphabetLetters(ctx);
+  renderNumberNodes(ctx);
 
   drawBabyFireBursts();
   drawFire();
@@ -2724,7 +3351,6 @@ function drawScene(now) {
     ctx.fillText(`Combo x${comboCount}!`, canvas.width / 2, 70);
   }
 }
-
 /************************************************************
  * ESCORT RENDERING
  ************************************************************/
@@ -2759,7 +3385,6 @@ function drawGoldenGate() {
 
   ctx.save();
 
-  // Pylons
   const pillarGradient = ctx.createLinearGradient(0, baseY, 0, baseY + gateHeight);
   pillarGradient.addColorStop(0, "#ffe9a3");
   pillarGradient.addColorStop(1, "#d59a32");
@@ -2788,7 +3413,7 @@ function drawGoldenGate() {
     ctx.fillRect(baseX + pillarWidth - 6, y - 3, innerGap + 12, 6);
   }
 
-  // Lattice detail
+  // Lattice
   ctx.strokeStyle = "rgba(255,255,255,0.25)";
   ctx.lineWidth = 2;
   for (let i = 0; i < beamCount; i++) {
@@ -2807,17 +3432,11 @@ function drawGoldenGate() {
   const portalY = baseY + gateHeight * 0.25;
   const portalRadius = innerGap * 0.45;
 
-  const portalGradient = ctx.createRadialGradient(
-    portalX,
-    portalY,
-    10,
-    portalX,
-    portalY,
-    portalRadius * 1.2
-  );
+  const portalGradient = ctx.createRadialGradient(portalX, portalY, 10, portalX, portalY, portalRadius * 1.2);
   portalGradient.addColorStop(0, "rgba(255,255,255,0.95)");
   portalGradient.addColorStop(0.4, "rgba(255,215,150,0.8)");
   portalGradient.addColorStop(1, "rgba(255,180,70,0.15)");
+
   ctx.fillStyle = portalGradient;
   ctx.beginPath();
   ctx.arc(portalX, portalY, portalRadius * 1.2, 0, Math.PI * 2);
@@ -2863,12 +3482,10 @@ function drawNimbusSprite(now) {
   const strikes = Math.min(maxHearts, Math.max(0, escortState.strikes || 0));
   const integrity = 1 - strikes / maxHearts;
   const { x, y } = escortState.spritePos;
-
   const bodyW = 120;
   const bodyH = 70;
   const scale = 0.48;
   const wobble = Math.sin(now / 260) * 3;
-
   const hitAge = escortState.lastHitAt ? now - escortState.lastHitAt : Infinity;
   const impactFlash = Math.max(0, 1 - hitAge / 350);
 
@@ -2876,13 +3493,13 @@ function drawNimbusSprite(now) {
   ctx.translate(x, y + wobble);
   ctx.scale(scale, scale);
 
-  // Soft drop shadow
+  // Drop shadow
   ctx.fillStyle = "rgba(0,0,0,0.2)";
   ctx.beginPath();
   ctx.ellipse(0, bodyH * 0.55, bodyW * 0.9, bodyH * 0.35, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Nimbus base body
+  // Nimbus body
   ctx.save();
   const bodyGradient = ctx.createRadialGradient(-25, -18, 15, 0, 0, bodyW);
   bodyGradient.addColorStop(0, "rgba(255,255,255,0.98)");
@@ -2893,7 +3510,7 @@ function drawNimbusSprite(now) {
   ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Bite marks carved out by damage
+  // Bite marks
   if (strikes > 0) {
     ctx.globalCompositeOperation = "destination-out";
     const chunks = Math.min(strikes, 3);
@@ -2902,22 +3519,14 @@ function drawNimbusSprite(now) {
       const cx = -bodyW * (0.35 + i * 0.12);
       const cy = (i % 2 === 0 ? -1 : 1) * bodyH * 0.15;
       ctx.beginPath();
-      ctx.ellipse(
-        cx,
-        cy,
-        bodyW * 0.35 * magnitude,
-        bodyH * 0.65,
-        0,
-        0,
-        Math.PI * 2
-      );
+      ctx.ellipse(cx, cy, bodyW * 0.35 * magnitude, bodyH * 0.65, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalCompositeOperation = "source-over";
   }
-  ctx.restore(); // end base/body composite
+  ctx.restore();
 
-  // Cracks for each hit
+  // Cracks
   if (strikes > 0) {
     ctx.strokeStyle = "rgba(140,160,210,0.9)";
     ctx.lineWidth = 3;
@@ -2925,20 +3534,14 @@ function drawNimbusSprite(now) {
       const angle = (-0.4 + (i / Math.max(1, strikes - 1)) * 0.8) * Math.PI;
       ctx.beginPath();
       ctx.moveTo(6, 0);
-      ctx.lineTo(
-        6 + Math.cos(angle) * bodyW * 0.55,
-        Math.sin(angle) * bodyH * 0.5
-      );
+      ctx.lineTo(6 + Math.cos(angle) * bodyW * 0.55, Math.sin(angle) * bodyH * 0.5);
       ctx.stroke();
     }
   }
 
-  // Hurt overlay / recent-hit flash
+  // Damage flash
   if (impactFlash > 0 || integrity < 0.7) {
-    const alpha = Math.min(
-      Math.max(impactFlash * 0.8, 0.05) + Math.max(0, 0.7 - integrity),
-      0.85
-    );
+    const alpha = Math.min(Math.max(impactFlash * 0.8, 0.05) + Math.max(0, 0.7 - integrity), 0.85);
     ctx.fillStyle = `rgba(255,70,70,${alpha})`;
     ctx.beginPath();
     ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
@@ -3003,24 +3606,12 @@ function drawEscortProgressHUD() {
   ctx.font = "18px Comic Sans MS";
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
-  ctx.fillText(
-    `${cfg.goalName ?? "Gate"} ${(escortState.spriteProgress * 100).toFixed(0)}%`,
-    canvas.width / 2,
-    barY - 8
-  );
+  ctx.fillText(`${cfg.goalName ?? "Gate"} ${(escortState.spriteProgress * 100).toFixed(0)}%`, canvas.width / 2, barY - 8);
 
   ctx.textAlign = "right";
-  ctx.fillText(
-    `Shields ${escortState.shields}/${cfg.targetShields}`,
-    canvas.width - 30,
-    32
-  );
+  ctx.fillText(`Shields ${escortState.shields}/${cfg.targetShields}`, canvas.width - 30, 32);
   ctx.textAlign = "left";
-  ctx.fillText(
-    `${cfg.stormName ?? "Storm"} – ${cfg.maxStrikes - escortState.strikes} hearts`,
-    30,
-    32
-  );
+  ctx.fillText(`${cfg.stormName ?? "Storm"} – ${cfg.maxStrikes - escortState.strikes} hearts`, 30, 32);
   ctx.textAlign = "center";
 }
 
@@ -3046,7 +3637,7 @@ function drawFinaleIndicator() {
   ctx.fillText("Hold to lift Nimbus!", canvas.width / 2, y + 40);
 }
 
-// Utility polyfill for roundRect on some browsers
+// Utility polyfill
 if (!CanvasRenderingContext2D.prototype.roundRect) {
   CanvasRenderingContext2D.prototype.roundRect = function (x, y, width, height, radius) {
     const r = typeof radius === "number" ? radius : 0;
@@ -3064,6 +3655,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
     return this;
   };
 }
+
 /************************************************************
  * GAME STATE MANAGEMENT
  ************************************************************/
@@ -3078,117 +3670,24 @@ function ensureGradient(gradient) {
 function resolveLevelForIndex(index) {
   const baseLevel = levels[index];
   if (!baseLevel) {
-    console.warn(`No level data for index ${index}.`);
+    console.warn(`No level data for index ${index}`);
     return null;
   }
-  const resolved = {
-    name: `Level ${index + 1}`,
-    mechanic: "scoreGoal",
-    control: "flap",
-    bgGradient: defaultLevelGradient,
-    levelNumber: index + 1,
-    ...baseLevel
-  };
+
+  // Merge defaults and add missing levelNumber (fix for math‑bubbles)
+  const resolved = Object.assign(
+    {
+      name: `Level ${index + 1}`,
+      mechanic: "scoreGoal",
+      control: "flap",
+      bgGradient: defaultLevelGradient,
+      levelNumber: index + 1
+    },
+    baseLevel
+  );
+
   resolved.bgGradient = ensureGradient(resolved.bgGradient);
-  levels[index] = resolved; // ensure future reads use the sanitized object
   return resolved;
-}
-
-function getControlHint(controlType = "flap") {
-  const controlHints = {
-    rhythm: "🎵 Tap / Space / ←→ to hit beats",
-    arrow: "🐉 Tap / Space to flap • Use Arrow Keys to rescue buddies",
-    flap: "🐉 Tap / Space to fly"
-  };
-  return controlHints[controlType] ?? controlHints.flap;
-}
-
-function initObjectsForLevel(L) {
-  objects.length = 0;
-  if (
-    L.mechanic === "rescueGoal" ||
-    L.mechanic === "rhythmBounce" ||
-    L.mechanic === "escortPulse"
-  )
-    return;
-
-  const baseCount = L.spawnCount ?? (L.mechanic === "scoreCollect" ? 10 : 8);
-  for (let i = 0; i < baseCount; i++) {
-    objects.push({
-      x: canvas.width + Math.random() * canvas.width,
-      y: 150 + Math.random() * 300,
-      radius: 28 + Math.random() * 10,
-      type: chooseObjectType(L)
-    });
-  }
-}
-
-function resetDragon() {
-  dragon.x = canvas.width * 0.25;
-  dragon.y = canvas.height * 0.5;
-  dragon.velocity = 0;
-  dragon.vx = 0;
-}
-
-function applyLevelTheme(L, index) {
-  if (L.bgGradient) {
-    document.body.style.background = `linear-gradient(to bottom, ${L.bgGradient[0]}, ${L.bgGradient[1]})`;
-  }
-  levelLabel.textContent = `Level ${index + 1} – ${L.name}`;
-}
-
-function updateScoreboardForLevel(L) {
-  if (L.mechanic === "coinGoal") {
-    updateCoinScoreboard(L);
-  } else if (L.mechanic === "rescueGoal") {
-    updateRescueScoreboard(L);
-  } else if (L.mechanic === "collectGoal" || L.mechanic === "scoreCollect") {
-    scoreText.textContent = `Collected ${collected}/${L.collectGoal ?? 0}`;
-  } else if (L.mechanic === "rhythmBounce") {
-    updateRhythmScoreboard();
-  } else if (L.mechanic === "escortPulse") {
-    const escortCfg = getEscortConfig(L);
-    scoreText.textContent = `Shields ${escortState.shields}/${escortCfg.targetShields}`;
-  } else {
-    scoreText.textContent = `Score ${score}/${L.winScore ?? 0}`;
-  }
-}
-
-function loadLevel(index) {
-  currentLevel = index;
-  const L = resolveLevelForIndex(currentLevel);
-  if (!L) return;
-
-  pickMusicForLevel(index);
-  resetDragon();
-
-  score = 0;
-  collected = 0;
-  coinBank = 0;
-  rescuedCount = 0;
-  comboCount = 0;
-  comboTextTimer = 0;
-  popTexts.length = 0;
-  flightStarted = false;
-  overlay.style.opacity = 1;
-
-  const escortHint = isEscortLevel(L)
-    ? "🌙 Tap to shield Nimbus • ←→ glide • Hold Space to finish!"
-    : getControlHint(L.control);
-  overlay.textContent = escortHint;
-
-  applyLevelTheme(L, index);
-  resetRescueState();
-  resetEscortState(L);
-
-  if (L.mechanic === "rescueGoal") {
-    rescueSlotQueue = podSlotOffsets.map((_, idx) => idx);
-    babyDragons = generateBabyDragons(L.rescueGoal);
-  }
-
-  initObjectsForLevel(L);
-  resetRhythmState(L);
-  updateScoreboardForLevel(L);
 }
 /************************************************************
  * GAME LOOP + PHYSICS
@@ -3250,23 +3749,189 @@ function updateDragonPhysics() {
     dragon.vx = 0;
   }
 }
+/************************************************************
+ * ALPHABET TIMER + COLLECTION HELPERS  ✅ (restores level 8)
+ ************************************************************/
+function updateAlphabetTimer(now = performance.now()) {
+  if (!alphabetState.active) return;
+
+  const elapsed = now - alphabetState.timerStart;
+  const remaining = alphabetState.timerMs - elapsed;
+
+  // optional fail‑timeout logic
+  if (remaining <= 0 && !alphabetState.failTriggered) {
+    alphabetState.failTriggered = true;
+    popTexts.push({
+      x: canvas.width / 2,
+      y: canvas.height / 2 - 40,
+      text: "Time up!",
+      color: "#ff7675",
+      life: 1.3
+    });
+    setTimeout(() => loadLevel(currentLevel), 1000);
+  }
+}
+
+function checkAlphabetCollection() {
+  if (!alphabetState.active) return;
+
+  // simple overlap check between dragon and each alphabet bubble
+  for (const node of alphabetState.letters) {
+    if (!node.active) continue;
+
+    const dx = dragon.x - node.x;
+    const dy = dragon.y - node.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < dragon.radius + node.radius * 0.6) {
+      node.active = false;
+      alphabetState.collected.push(node.letter);
+
+      popTexts.push({
+        x: node.x,
+        y: node.y,
+        text: node.letter,
+        color: "#ffe066",
+        life: 1
+      });
+      playPopSound();
+
+      // win once all target letters are collected
+      if (
+        alphabetState.collected.length >= alphabetState.targetLetters.length &&
+        !levelEnding
+      ) {
+        levelComplete();
+      }
+    }
+  }
+
+  // prune inactive letters from draw list if you prefer
+  alphabetState.letters = alphabetState.letters.filter(l => l.active);
+}
+
+/************************************************************
+ * NUMBER TIMER + COLLECTION HELPERS  ✅ (restores level 9)
+ ************************************************************/
+function updateNumberTimer(now = performance.now()) {
+  // Prevent freeze if called on number levels
+  if (!numberState) return;
+
+  if (!numberState.startTime) numberState.startTime = now;
+  numberState.elapsed = now - numberState.startTime;
+
+  // Optional: you can add countdown or progression logic here later
+}
+
+function checkNumberCollection() {
+  if (!numberState?.active) return;
+
+  // pick whichever array the level actually uses
+  const nodes = Array.isArray(numberState.numbers)
+    ? numberState.numbers
+    : Array.isArray(numberState.nodes)
+    ? numberState.nodes
+    : [];
+
+  if (nodes.length === 0) {
+    // leave a small trace for debugging
+    console.warn("⚠️ checkNumberCollection: no number bubbles found", numberState);
+    return;
+  }
+
+  for (const node of nodes) {
+    if (!node?.active) continue;
+
+    const dx = dragon.x - node.x;
+    const dy = dragon.y - node.y;
+    const dist = Math.hypot(dx, dy);
+
+    // bubble pop test
+    if (dist < (dragon.radius ?? 40) + (node.radius ?? 20) * 0.6) {
+      node.active = false;
+
+      if (!Array.isArray(numberState.collected)) numberState.collected = [];
+      numberState.collected.push(node.value ?? node.num ?? "?");
+
+      popTexts.push({
+        x: node.x,
+        y: node.y,
+        text: String(node.value ?? node.num ?? ""),
+        color: "#74b9ff",
+        life: 1
+      });
+
+      if (typeof playPopSound === "function") playPopSound();
+
+      // win condition
+      const targetCount = numberState.targetNumbers?.length ?? numberState.sequence?.length ?? 0;
+      if (numberState.collected.length >= targetCount && !levelEnding) {
+        levelComplete();
+      }
+    }
+  }
+
+  // keep only active bubbles
+  if (Array.isArray(numberState.numbers)) {
+    numberState.numbers = nodes.filter(n => n.active);
+  } else if (Array.isArray(numberState.nodes)) {
+    numberState.nodes = nodes.filter(n => n.active);
+  }
+}
+
+/************************************************************
+ * MAIN GAME LOOP
+ ************************************************************/
+function isEscortLevel(level = levels[currentLevel]) {
+  return level?.mechanic === "escortPulse";
+}
 
 function updateGame(delta, time) {
   if (isRescueLevel()) {
     updateBabyDragons();
   }
+
   if (isRhythmLevel()) {
     updateRhythmLevel(time);
+  }
+
+  if (alphabetState.active) {
+    updateAlphabetTimer(time);
+    checkAlphabetCollection();
+  }
+  // --- NUMBER LEVELS (safe guarded against missing functions or data) ---
+  try {
+    if (typeof isNumberLevel === "function" && isNumberLevel()) {
+      if (typeof updateNumberTimer === "function") {
+        updateNumberTimer(time);
+      }
+      if (typeof checkNumberCollection === "function") {
+        checkNumberCollection();
+      }
+    }
+  } catch (err) {
+    console.warn("⚠️ Number level logic skipped due to error:", err);
   }
 
   applyDirectionalInput();
   updateDragonPhysics();
 
-  if (isEscortLevel()) {
-    updateEscortLevel(delta, time);
-    return;
+  // ✅ Escort levels: update every frame to spawn hazards & progress Nimbus
+  const L = levels[currentLevel];   // 🔹 Get the actual level object once
+
+  if (isEscortLevel(L)) {           // 🔹 Pass it explicitly so both checks agree
+    console.log("🚀 updateGame ➜ calling updateEscortLevel() for escort mode", {
+      levelIndex: currentLevel,
+      name: L?.name,
+      mechanic: L?.mechanic,
+      escortActive: escortState.active
+    });
+
+    updateEscortLevel(delta, time, L); // ⬅ pass the level object (optional but safe)
+    return; // stop here to skip normal hit detection
   }
 
+  // --- Normal (non-escort) level logic below ---
   if (!isRhythmLevel()) {
     const sustaining = keysPressed.has("Space") || keysPressed.has("ArrowUp");
     if (sustaining) {
@@ -3292,13 +3957,30 @@ function gameLoop(timestamp) {
 }
 
 /************************************************************
- * ESCORT LOOP HELPERS
+ * ESCORT LOOP HELPERS – hazard spawn diagnostics + safe timing
  ************************************************************/
 function updateEscortLevel(delta, now) {
   const levelConfig = levels[currentLevel];
   if (!escortState.active || !levelConfig || levelEnding) return;
 
   const cfg = getEscortConfig(levelConfig);
+  if (!cfg || !cfg.durationMs) return;
+
+  // 🧭 Inspect escort progress every 1s
+  if (Math.round(now) % 1000 < 20) {
+    console.log("Escort tick:", {
+      currentLevel,
+      mech: levelConfig.mechanic,
+      elapsed: escortState.elapsed,
+      duration: cfg.durationMs,
+      hazardBurstInterval: cfg.hazardBurstInterval,
+      shields: escortState.shields,
+      strikes: escortState.strikes,
+      hazards: escortState.hazards?.length || 0
+    });
+  }
+
+  // Initialise timers if needed
   if (escortState.elapsed === 0 || escortState.hazardTimer === undefined) {
     escortState.hazardTimer = 0;
     escortState.shieldDecayTimer = 0;
@@ -3310,29 +3992,37 @@ function updateEscortLevel(delta, now) {
   escortState.spriteProgress = progress;
   updateEscortSpritePosition(progress);
 
-  // Hazard rhythm
+  // --- hazard rhythm ---
   escortState.hazardTimer += delta;
-  if (escortState.hazardTimer >= cfg.hazardBurstInterval) {
-    escortState.hazardTimer -= cfg.hazardBurstInterval;
+
+  // 💬 diagnostic logs each cycle
+  if (escortState.hazardTimer >= (cfg.hazardBurstInterval || 1500)) {
+    console.log("💥 SPAWN CALL — timer hit threshold");
+    escortState.hazardTimer = 0;
     spawnMoonRockHazard(cfg);
-  } else if (Math.random() < delta / (cfg.hazardBurstInterval * 2.2)) {
+    console.log("  hazards after push:", escortState.hazards.length);
+  } else if (Math.random() < delta / ((cfg.hazardBurstInterval || 1500) * 2.2)) {
+    console.log("💥 RANDOM SPAWN CALL");
     spawnMoonRockHazard(cfg);
+    console.log("  hazards after push:", escortState.hazards.length);
   }
 
-  // Shield decay
+  // --- shield decay ---
   escortState.shieldDecayTimer = (escortState.shieldDecayTimer ?? 0) + delta;
   if (
     escortState.shields > 0 &&
-    escortState.shieldDecayTimer >= cfg.shieldDecayMs
+    escortState.shieldDecayTimer >= (cfg.shieldDecayMs || 3600)
   ) {
-    escortState.shieldDecayTimer -= cfg.shieldDecayMs;
+    escortState.shieldDecayTimer -= (cfg.shieldDecayMs || 3600);
     escortState.shields = Math.max(0, escortState.shields - 1);
     updateScoreboardForLevel(levelConfig);
   }
 
+  // --- update hazards + HUD ---
   updateEscortHazards(delta, cfg);
   updateEscortLifeMeter(cfg);
 
+  // --- check fail / finale ---
   if (escortState.strikes >= cfg.maxStrikes && !escortState.failTriggered) {
     triggerEscortFail("Nimbus overwhelmed!");
     return;
@@ -3354,15 +4044,17 @@ function updateEscortSpritePosition(progress) {
       ? 2 * progress * progress
       : -1 + (4 - 2 * progress) * progress;
   escortState.spritePos.x = lerp(startX, endX, eased);
-  const wave = Math.sin(progress * Math.PI * 2) * canvas.height * 0.06;
-  escortState.spritePos.y = canvas.height * 0.4 + wave;
+  escortState.spritePos.y =
+    canvas.height * 0.4 + Math.sin(progress * Math.PI * 2) * canvas.height * 0.06;
 }
 
 function spawnMoonRockHazard(cfg) {
   const baseSpeed = (cfg.moonRockSpeed || 520) / 1000;
+  const yStart = canvas.height * 0.25 + Math.random() * canvas.height * 0.5;
+
   escortState.hazards.push({
     x: canvas.width + 80,
-    y: canvas.height * 0.3 + Math.random() * canvas.height * 0.4,
+    y: yStart,
     vx: -baseSpeed * (0.75 + Math.random() * 0.4),
     vy: (Math.random() - 0.5) * 0.08,
     radius: 18 + Math.random() * 18,
@@ -3374,28 +4066,23 @@ function spawnMoonRockHazard(cfg) {
 
 function updateEscortHazards(delta, cfg) {
   const sprite = escortState.spritePos;
-  escortState.hazards.forEach(h => {
-    if (!h.active) return;
+  for (const h of escortState.hazards) {
+    if (!h.active) continue;
     h.x += h.vx * delta;
     h.y += h.vy * delta;
     h.spin += (h.spinSpeed || 0) * delta;
-
-    if (h.y < 80 || h.y > canvas.height - 80) {
-      h.vy *= -1;
-    }
+    if (h.y < 80 || h.y > canvas.height - 80) h.vy *= -1;
 
     const spriteHit =
-      Math.hypot(h.x - sprite.x, h.y - sprite.y) <
-      h.radius + 42;
+      Math.hypot(h.x - sprite.x, h.y - sprite.y) < h.radius + 42;
     if (spriteHit) {
       h.active = false;
       handleMoonRockStrike(cfg, h.x, h.y);
-      return;
+      continue;
     }
 
     const dragonHit =
-      Math.hypot(h.x - dragon.x, h.y - dragon.y) <
-      h.radius + dragon.radius * 0.65;
+      Math.hypot(h.x - dragon.x, h.y - dragon.y) < h.radius + dragon.radius * 0.65;
     if (dragonHit) {
       h.active = false;
       popTexts.push({
@@ -3406,11 +4093,9 @@ function updateEscortHazards(delta, cfg) {
         life: 1
       });
     }
-  });
+  }
 
-  escortState.hazards = escortState.hazards.filter(
-    h => h.active && h.x > -120
-  );
+  escortState.hazards = escortState.hazards.filter(h => h.active && h.x > -120);
 }
 
 function handleMoonRockStrike(cfg, x = canvas.width / 2, y = canvas.height / 2) {
@@ -3443,7 +4128,6 @@ function updateEscortLifeMeter(cfg) {
     lifeMeter.style.display = "none";
     return;
   }
-
   lifeMeter.style.display = "block";
   let html = "";
   for (let i = 0; i < cfg.maxStrikes; i++) {
@@ -3465,13 +4149,7 @@ function handleEscortFinale(delta, cfg) {
     0,
     Math.min(cfg.finaleHoldMs, escortState.finaleHold.heldMs + change)
   );
-
-  if (
-    holding &&
-    escortState.finaleHold.heldMs >= cfg.finaleHoldMs &&
-    !levelEnding
-  ) {
-    escortState.active = false;
+  if (holding && escortState.finaleHold.heldMs >= cfg.finaleHoldMs && !levelEnding) {
     lifeMeter.style.display = "none";
     levelComplete();
   }
@@ -3481,7 +4159,6 @@ function triggerEscortFail(message = "Nimbus lost!") {
   if (escortState.failTriggered) return;
   escortState.failTriggered = true;
   levelEnding = true;
-
   popTexts.push({
     x: canvas.width / 2,
     y: canvas.height * 0.4,
@@ -3489,12 +4166,50 @@ function triggerEscortFail(message = "Nimbus lost!") {
     color: "#ffe066",
     life: 1.5
   });
-
   setTimeout(() => {
     lifeMeter.style.display = "none";
     levelEnding = false;
     loadLevel(currentLevel);
   }, 1400);
+}
+/************************************************************
+ * ESCORT STATE RESET
+ ************************************************************/
+const escortState = {
+  active: false,
+  elapsed: 0,
+  hazardTimer: 0,
+  shieldDecayTimer: 0,
+  moteTimer: 0,
+  spriteProgress: 0,
+  spritePos: { x: 0, y: 0 },
+  hazards: [],
+  shields: 0,
+  strikes: 0,
+  failTriggered: false,
+  lastHitAt: 0,
+  finaleHold: { active: false, heldMs: 0 }
+};
+
+function getEscortConfig(levelConfig) {
+  return levelConfig && levelConfig.escort ? levelConfig.escort : {};
+}
+
+function resetEscortState(levelConfig) {
+  const cfg = getEscortConfig(levelConfig);
+  escortState.active = true;
+  escortState.elapsed = 0;
+  escortState.hazards = [];
+  escortState.strikes = 0;
+  escortState.shields = cfg.targetShields || 7;
+  escortState.spriteProgress = 0;
+  escortState.spritePos = {
+    x: canvas.width * 0.2,
+    y: canvas.height * 0.45
+  };
+  escortState.failTriggered = false;
+  escortState.lastHitAt = 0;
+  escortState.finaleHold = { active: false, heldMs: 0 };
 }
 /************************************************************
  * INPUT HANDLERS
@@ -3548,13 +4263,17 @@ const controlKeys = new Set([
   "KeyD"
 ]);
 
+/************************************************************
+ * INPUT HANDLING: keyboard + touch + escort tap
+ ************************************************************/
 document.addEventListener("keydown", e => {
   if (controlKeys.has(e.code)) {
     e.preventDefault();
   }
   focusCanvas();
 
-  if (isRhythmLevel()) {
+  // === Rhythm level controls ===
+  if (typeof isRhythmLevel === "function" && isRhythmLevel()) {
     switch (e.code) {
       case "ArrowLeft":
       case "KeyA":
@@ -3573,7 +4292,8 @@ document.addEventListener("keydown", e => {
 
   keysPressed.add(e.code);
 
-  if (isEscortLevel()) {
+  // === Escort‑mode controls ===
+  if (typeof isEscortLevel === "function" && isEscortLevel()) {
     if (e.code === "Space" || e.code === "ArrowUp" || e.code === "Enter") {
       handleEscortTap();
     } else if (e.code === "ArrowLeft" || e.code === "KeyA") {
@@ -3581,9 +4301,10 @@ document.addEventListener("keydown", e => {
     } else if (e.code === "ArrowRight" || e.code === "KeyD") {
       dragon.vx += 1.25;
     }
-    return;
+    return; // stop normal controls
   }
 
+  // === Default flight controls ===
   if (e.code === "Space" || e.code === "ArrowUp") {
     flapDragon();
   } else if (e.code === "ArrowLeft") {
@@ -3607,28 +4328,32 @@ document.addEventListener("keyup", e => {
   }
 });
 
+// --- Touch controls ---
 const touchControls = document.getElementById("touchControls");
 const btnLeft  = document.getElementById("btnLeft");
 const btnFlap  = document.getElementById("btnFlap");
 const btnRight = document.getElementById("btnRight");
 
-btnLeft.ontouchstart  = () => keysPressed.add("ArrowLeft");
-btnLeft.ontouchend    = () => keysPressed.delete("ArrowLeft");
-btnRight.ontouchstart = () => keysPressed.add("ArrowRight");
-btnRight.ontouchend   = () => keysPressed.delete("ArrowRight");
-btnFlap.ontouchstart  = () => {
-  if (isRhythmLevel()) return handleRhythmInput();
-  if (isEscortLevel()) return handleEscortTap();
-  flapDragon();
-};
+if (btnLeft && btnRight && btnFlap) {
+  btnLeft.ontouchstart  = () => keysPressed.add("ArrowLeft");
+  btnLeft.ontouchend    = () => keysPressed.delete("ArrowLeft");
+  btnRight.ontouchstart = () => keysPressed.add("ArrowRight");
+  btnRight.ontouchend   = () => keysPressed.delete("ArrowRight");
+  btnFlap.ontouchstart  = () => {
+    if (typeof isRhythmLevel === "function" && isRhythmLevel()) return handleRhythmInput();
+    if (typeof isEscortLevel === "function" && isEscortLevel()) return handleEscortTap();
+    flapDragon();
+  };
+}
 
+// --- Escort‑tap handler ---
 function handleEscortTap() {
-  if (!isEscortLevel() || levelEnding) return;
+  if (typeof isEscortLevel !== "function" || !isEscortLevel() || levelEnding) return;
   ensureAudioContext();
 
   escortState.lastTapTime = performance.now();
 
-  // Restore full lift so the dragon climbs like a normal flap
+  // restore lift so dragon climbs like normal flap
   rhythmTapBoost(0.55);
   flapDragon();
 
@@ -3640,14 +4365,20 @@ function handleEscortTap() {
     life: 0.7
   });
 }
+
 /************************************************************
- * LEVEL SKIP
+ * LEVEL SKIP — canonical version from working build
  ************************************************************/
 function skipLevel() {
   const next = (currentLevel + 1) % levels.length;
-  loadLevel(next);
+  if (typeof loadLevel === "function") {
+    loadLevel(next);
+  } else {
+    console.warn("⚠️ loadLevel() not defined yet — cannot skip level.");
+  }
 }
 
+// --- Focus handling for accessibility ---
 const clearSkipFocus = () => {
   if (document.activeElement === skipBtn) {
     skipBtn.blur();
@@ -3656,6 +4387,7 @@ const clearSkipFocus = () => {
 
 skipBtn.type = "button";
 skipBtn.tabIndex = -1;
+
 skipBtn.addEventListener("focus", clearSkipFocus);
 skipBtn.addEventListener("pointerdown", clearSkipFocus);
 skipBtn.addEventListener("keydown", e => {
@@ -3665,8 +4397,114 @@ skipBtn.addEventListener("keydown", e => {
   }
 });
 
+function loadLevel(index = 0) {
+  const safeIndex = Math.max(0, Math.min(levels.length - 1, index));
+  const level = resolveLevelForIndex(safeIndex);
+  if (!level) {
+    console.warn("⚠️ No level config for index", safeIndex);
+    return;
+  }
+
+  currentLevel = safeIndex;
+  currentLevelIndex = safeIndex;
+  flightStarted = false;
+  levelEnding = false;
+
+  score = 0;
+  coinBank = 0;
+  collected = 0;
+  rescuedCount = 0;
+  comboCount = 0;
+  comboTextTimer = 0;
+  popTexts.length = 0;
+
+  winOverlay.style.display = "none";
+  overlay.style.opacity = 1;
+
+  const levelNumber = level.levelNumber ?? safeIndex + 1;
+  levelLabel.textContent = `Level ${levelNumber}: ${level.name || "Adventure"}`;
+
+const gradient = ensureGradient(level.bgGradient);
+document.body.style.background = `linear-gradient(to bottom, ${gradient[0]}, ${gradient[1]})`;
+
+if (isMathBubbleLevel(level)) {
+  currentMathEquation = level.mathEquation || "2 + 2 = 4";
+
+  mathBubbleTokens = currentMathEquation.split(/\s+/).filter(Boolean);
+  const rescueGoal = Math.max(1, level.rescueGoal || 1);
+
+  mathBubbleStageBreakpoints = Array.from(
+    { length: Math.max(0, rescueGoal - 1) },
+    (_, idx) => {
+      const tokensToShow = (idx + 1) * 2;
+      return Math.min(mathBubbleTokens.length - 1, tokensToShow);
+    }
+  );
+
+  mathBubbleStage = 0;
+} else {
+  currentMathEquation = "";
+  mathBubbleStage = 0;
+  mathBubbleTokens = [];
+  mathBubbleStageBreakpoints = [];
+}
+
+if (mathBubbleRevealTimeout) {
+  clearTimeout(mathBubbleRevealTimeout);
+  mathBubbleRevealTimeout = null;
+}
+
+resetAlphabetState(level);
+  resetNumberState(level);
+  resetRhythmState(level);
+  resetRescueState();
+  escortState.active = false;
+
+  objects.length = 0;
+
+  if (isEscortLevel(level)) {
+    resetEscortState(level);
+    updateEscortLifeMeter(getEscortConfig(level));
+  } else {
+    lifeMeter.style.display = "none";
+  }
+
+  const isSpecialLevel =
+    isRescueLevel(level) ||
+    isRhythmLevel(level) ||
+    isEscortLevel(level) ||
+    isAlphabetLevel(level) ||
+    isNumberLevel(level);
+
+  if (!isSpecialLevel) {
+    for (let i = 0; i < 8; i++) {
+      objects.push({
+        x: Math.random() * canvas.width,
+        y: 120 + Math.random() * 260,
+        radius: 25 + Math.random() * 20,
+        type: chooseObjectType(level)
+      });
+    }
+  }
+
+  if (isRescueLevel(level)) {
+    babyDragons = generateBabyDragons(level.rescueGoal || 5);
+    rescueSlotQueue = [...Array(podSlotOffsets.length).keys()];
+  }
+
+  if (isRhythmLevel(level)) {
+    updateLifeMeter();
+  }
+
+  updateScoreboardForLevel(level);
+  pickMusicForLevel(safeIndex);
+}
+
 window.addEventListener("keydown", e => {
-  if ((e.code === "Space" || e.code === "Enter") && document.activeElement === skipBtn) {
+  if (
+    (e.code === "Space" || e.code === "Enter") &&
+    document.activeElement === skipBtn
+  ) {
     e.preventDefault();
     clearSkipFocus();
   }
@@ -3676,22 +4514,34 @@ skipBtn.addEventListener("click", () => {
   skipLevel();
   clearSkipFocus();
 });
-    clearSkipFocus();
-  
-</script>
 
+clearSkipFocus();
 
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
-  
+/************************************************************
+ * START GAME — safe entry‑point (correctly balanced)
+ ************************************************************/
+window.addEventListener("DOMContentLoaded", () => {
+  try {
+    if (typeof loadLevel === "function") {
+      loadLevel(0); // start at level 1
+    } else {
+      console.error("❌ loadLevel() is not defined — check script order.");
+    }
 
-<script>
-// === START GAME ===
-loadLevel(0);                 // Load the first level automatically
-requestAnimationFrame(gameLoop); // Begin continuous update & draw
+    if (typeof gameLoop === "function") {
+      requestAnimationFrame(gameLoop); // begin continuous update & draw
+    } else {
+      console.error("❌ gameLoop() is not defined — verify it’s above this line.");
+    }
+  } catch (err) {
+    console.error("💥 Startup error:", err);
+  }
+}); // ✅ closes event listener properly
+
 </script>
 </body>
 </html>
+
 
 
 
